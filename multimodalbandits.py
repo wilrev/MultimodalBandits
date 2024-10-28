@@ -398,11 +398,11 @@ def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=1):
     return results, plot_data
 
 # # Run the experiment
-n_arms_list = [5,6,7,8,9,10]
+n_arms_list = [10,12,14,16,18,20]
 n_modes_list = [2, 3, 4]
 N_list = [100, 200, 300]
 
-results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
+# results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
 #uncomment above to run the experiment
 
 def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list):
