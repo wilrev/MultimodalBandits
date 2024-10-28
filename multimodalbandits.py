@@ -164,10 +164,13 @@ def regression_all(G,mu,eta,N,nb_modes):
                  if (k != kstar):
                      for j in m:
                          p = list(m);p.remove(j);p.append(k)
-                         lambdastar_new = regression_graph(G,mu,eta,p,k,N)
-                         if (vstar > sum(eta*divergence(mu,lambdastar_new))):
-                             lambdastar = lambdastar_new
-                             vstar = sum(eta*divergence(mu,lambdastar_new))
+                         lambda_new=np.copy(mu)
+                         lambda_new[k]=mu[kstar]
+                         if vstar>sum(eta*divergence(mu,lambda_new)): #if this is not the case there is no point to test this case
+                             lambdastar_new = regression_graph(G,mu,eta,p,k,N)
+                             if (vstar > sum(eta*divergence(mu,lambdastar_new))):
+                                 lambdastar = lambdastar_new
+                                 vstar = sum(eta*divergence(mu,lambdastar_new))
      # t2=time.time()
      # print(t2-t)
      return(lambdastar,vstar)
@@ -395,11 +398,11 @@ def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=1):
     return results, plot_data
 
 # # Run the experiment
-n_arms_list = [10,12,14,16,18,20]
+n_arms_list = [5,6,7,8,9,10]
 n_modes_list = [2, 3, 4]
 N_list = [100, 200, 300]
 
-# results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
+results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
 #uncomment above to run the experiment
 
 def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list):
