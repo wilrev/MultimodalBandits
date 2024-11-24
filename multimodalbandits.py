@@ -83,7 +83,9 @@ def regression_graph(G,mu,eta,p,k,N):
             if ell in p: #ell can be a mode
                 f[ell,i,0] = e*divergence(mu[ell],z)
                 f[ell,i,1] = e*divergence(mu[ell],z)
-                for j in T.successors(ell): f[ell,i,1] += fsquare[j,i]
+                for j in T.successors(ell): 
+                    f[ell,i,1] += fsquare[j,i]
+                    f[ell,i,0] += fsquare[j,i]
             else: #ell cannot be a mode, and needs to have a neighbour whose reward is higher
                 f[ell,i,0] = e*divergence(mu[ell],z) 
                 for j in T.successors(ell): f[ell,i,0] += fsquare[j,i]
@@ -93,9 +95,13 @@ def regression_graph(G,mu,eta,p,k,N):
                     f[ell,i,1] = 10 ** 10
         #compute the value of fstar and fsquare
         fstar[ell,0,0] = f[ell,0,0]
-        fstar[ell,N-1,1] = f[ell,N-1,1]
         for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0])
-        for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-1-i,1])                    
+        if any(True for _ in T.successors(ell)):
+            fstar[ell,N-1,1] = f[ell,N-1,1]
+            for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-1-i,1])           
+        else: #we want to allow lambda_l=lambda_pred if l has no children
+            for i in range(N): fstar[ell,i,1] = e*divergence(mu[ell],grid[i])
+
         for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
     #loop over the nodes sorted by decreasing depth
     lambdastar[k] = max(grid)
@@ -313,7 +319,7 @@ def generate_spread_out_modes(n_arms, n_modes):
     
     return sorted(modes)
 
-def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=1):
+def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=5 ):
     results = {}
     plot_data = {}
     
@@ -350,7 +356,7 @@ def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=1):
                         print(f"Generated mu (after adjustment): {mu}")
                     
                         try:
-                            _, _, runtime = subgradient_descent_timed(G, mu, N, 10, n_modes) #10 iterations of gradient descent
+                            _, _, runtime = subgradient_descent_timed(G, mu, N, 100, n_modes) #100 iterations of gradient descent
                             results[key].append(runtime)
                         except Exception as e:
                             print(f"Error occurred: {str(e)}")
@@ -398,11 +404,11 @@ def run_experiment(n_arms_list, n_modes_list, N_list, num_trials=1):
     return results, plot_data
 
 # # Run the experiment
-n_arms_list = [10,12,14,16,18,20]
-n_modes_list = [2, 3, 4]
-N_list = [100, 200, 300]
+n_arms_list = [20,25,30,35,40,45,50,55,60]
+n_modes_list = [2, 3, 4, 5]
+N_list = [100]
 
-# results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
+results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
 #uncomment above to run the experiment
 
 def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list):
