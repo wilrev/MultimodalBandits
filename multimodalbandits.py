@@ -104,12 +104,12 @@ def regression_graph(G,mu,eta,p,k,N):
 
         for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
     #loop over the nodes sorted by decreasing depth
-    lambdastar[k] = max(grid)
+    lambdastar[k] = max(mu)
     pred=0
     for ell in list(T.nodes()):
         for i in T.predecessors(ell): pred=i
         if (ell == k):
-            lambdastar[ell] = max(mu)+1/N
+            lambdastar[ell] = max(mu)
         else:
             for i in range(N): v[ell,i] = f[ell,i, int(grid[i] > lambdastar[pred])] 
             lambdastar[ell] = grid[np.argmin(v[ell,:])]
