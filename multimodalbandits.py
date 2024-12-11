@@ -73,15 +73,15 @@ def regression_graph(G,mu,eta,p,k,N):
     fstar = np.zeros([K,N,2]) #(-1,+1)
     fsquare = np.zeros([K,N])
     v = np.zeros([K,N])
-    lambdastar = np.zeros(K)
+    lambdastar = np.zeros(mu.shape[0])
     #loop over the nodes sorted by decreasing depth to compute the f values
     for ell in reversed(list(T.nodes())):
         #if ell is the maximizer of mu, then eta = +infty
         e = 10 ** 10 if (ell == kstar) else eta[ell] 
         #compute the value of f
-        for i,z in enumerate(grid):
+        for i,z in enumerate(grid): #f[ell,i,0]=f_ell(grid[i]=z,-1), f[ell,i,1]=f_ell(grid[i]=z,1)
             if ell in p: #ell can be a mode
-                f[ell,i,0] = e*divergence(mu[ell],z)
+                f[ell,i,0] = e*divergence(mu[ell],z) 
                 f[ell,i,1] = e*divergence(mu[ell],z)
                 for j in T.successors(ell): 
                     f[ell,i,1] += fsquare[j,i]
@@ -89,30 +89,57 @@ def regression_graph(G,mu,eta,p,k,N):
             else: #ell cannot be a mode, and needs to have a neighbour whose reward is higher
                 f[ell,i,0] = e*divergence(mu[ell],z) 
                 for j in T.successors(ell): f[ell,i,0] += fsquare[j,i]
-                if any(True for _ in T.successors(ell)):
-                    f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in T.successors(ell)]) + min([(fstar[j,i,1] - fsquare[j,i]) for j in T.successors(ell)])
+                if any(T.successors(ell)):
+                    f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in T.successors(ell)]) + min([min(fstar[j,i,1],f[j,i,0]) - fsquare[j,i] for j in T.successors(ell)])
                 else:
                     f[ell,i,1] = 10 ** 10
         #compute the value of fstar and fsquare
         fstar[ell,0,0] = f[ell,0,0]
-        for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0])
-        if any(True for _ in T.successors(ell)):
-            fstar[ell,N-1,1] = f[ell,N-1,1]
-            for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-1-i,1])           
-        else: #we want to allow lambda_l=lambda_pred if l has no children
-            for i in range(N): fstar[ell,i,1] = e*divergence(mu[ell],grid[i])
-
+        for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0]) #min_{w \leq mu_*} [...] = fstar[ell,N-1,0]=min_{i=0,...,N-1} f[ell,i,0]
+        fstar[ell,N-1,1] = 10**10
+        for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-i,1])
         for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
-    #loop over the nodes sorted by decreasing depth
     lambdastar[k] = max(mu)
-    pred=0
     for ell in list(T.nodes()):
-        for i in T.predecessors(ell): pred=i
-        if (ell == k):
-            lambdastar[ell] = max(mu)
+        if ell == k:
+            continue
+        # Find parent
+        parent = next(T.predecessors(ell))        
+        parent_grid_index = np.where(grid == lambdastar[parent])[0][0]
+        
+        # Check two conditions to see if the value of ell is constrained by the past
+        
+        # 1. Parent's lambda is strictly larger than grandparent's lambda
+        grandparent_list = list(T.predecessors(parent))
+        ell_is_constrained = False
+        if grandparent_list :
+            grandparent = grandparent_list[0]
+            if lambdastar[parent] > lambdastar[grandparent] and parent not in p:
+                # 2. Find the child that minimizes the specific term
+                child_terms = [
+                    min(fstar[j, parent_grid_index, 1], f[j, parent_grid_index, 0]) - fsquare[j, parent_grid_index]
+                    for j in T.successors(parent)
+                ]
+                min_child_index = np.argmin(child_terms)
+                constrained_child = list(T.successors(parent))[min_child_index]
+                
+                # Check if this is the current node
+                if ell == constrained_child:
+                    ell_is_constrained = True
+        
+        # Apply appropriate formula if ell is constrained
+        if ell_is_constrained:
+            # Ensure λ_ℓ is strictly greater than parent's λ
+            if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
+                lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+            else:
+                lambdastar[ell] = lambdastar[parent]
         else:
-            for i in range(N): v[ell,i] = f[ell,i, int(grid[i] > lambdastar[pred])] 
-            lambdastar[ell] = grid[np.argmin(v[ell,:])]
+            #no constraint on ell
+            if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
+                lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+            else:
+                lambdastar[ell] = grid[np.argmin(f[ell, :parent_grid_index+1, 0])]
     #debug information
     if DEB:    
         for ell in range(K):
@@ -132,7 +159,6 @@ def regression_graph(G,mu,eta,p,k,N):
         print("Optimal Value",np.round(fsquare[k,N-1],3))
         check_modes(G,lambdastar,p)
     return(lambdastar)
-
     
 def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
     #compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
@@ -408,7 +434,7 @@ n_arms_list = [20,25,30,35,40,45,50,55,60]
 n_modes_list = [2, 3, 4, 5]
 N_list = [100]
 
-results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
+#results, plot_data = run_experiment(n_arms_list, n_modes_list, N_list)
 #uncomment above to run the experiment
 
 def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list):
@@ -479,16 +505,16 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
     plt.savefig('complexity_N.png')
     plt.show()
 
-analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list)
-analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list)
+# analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list)
+# analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list)
 
-# # Access plot data for a specific N and number of modes
-N = 100
-n_modes = 2
-x_values = plot_data[(n_modes, N)]['x']
-y_values = plot_data[(n_modes, N)]['y']
+# # # Access plot data for a specific N and number of modes
+# N = 100
+# n_modes = 2
+# x_values = plot_data[(n_modes, N)]['x']
+# y_values = plot_data[(n_modes, N)]['y']
 
-print(f"For N={N} and {n_modes} modes:")
-print(f"Number of arms: {x_values}")
-print(f"Average runtimes: {y_values}")
+# print(f"For N={N} and {n_modes} modes:")
+# print(f"Number of arms: {x_values}")
+# print(f"Average runtimes: {y_values}")
 
