@@ -429,7 +429,7 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
         
         axs[i].set_xlabel('Number of arms')
         axs[i].set_ylabel('Average runtime (s)')
-        axs[i].set_title(f'N = {N}')
+        #axs[i].set_title(f'N = {N}')
         axs[i].legend()
         axs[i].set_xscale('log')
         axs[i].set_yscale('log')
@@ -474,7 +474,7 @@ def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_
         
         axs[i].set_xlabel('Number of modes')
         axs[i].set_ylabel('Average runtime (s)')
-        axs[i].set_title(f'N = {N}')
+        #axs[i].set_title(f'N = {N}')
         axs[i].legend()
         axs[i].set_xscale('log')
         axs[i].set_yscale('log')
@@ -508,7 +508,7 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
         
         axs[i].set_xlabel('Number of discretization points (N)')
         axs[i].set_ylabel('Average runtime (s)')
-        axs[i].set_title(f'n_modes = {n_modes}')
+        #axs[i].set_title(f'n_modes = {n_modes}')
         axs[i].legend()
         axs[i].set_xscale('log')
         axs[i].set_yscale('log')
