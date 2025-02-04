@@ -347,6 +347,20 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
     results = {}
     plot_data = {}
     
+    plt.style.use('seaborn-whitegrid') 
+    plt.rcParams['legend.frameon'] = True
+    plt.rcParams.update({
+        'font.size': 15,
+        'axes.labelsize': 20,
+        'axes.titlesize': 20,
+        'legend.fontsize': 15,
+        'xtick.labelsize': 15,
+        'ytick.labelsize': 15,
+        'lines.linewidth': 2,
+        'lines.markersize': 8,
+        'figure.figsize': (10, 5)
+    })
+    
     for n_modes in n_modes_list:
         for N in N_list:
             key = (n_modes, N)
@@ -649,10 +663,12 @@ def run_trials(true_means, graph, m, K, T, strategy, num_trials):
     return np.array(all_regrets)
 
 def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trials):
-    """Plot regret curves with confidence intervals."""
+    """Plot regret curves with empirical confidence intervals."""
     plt.figure(figsize=(10, 6))
+    # 97.5% quantile of standard Gaussian 
+    quantile = stats.norm.ppf(0.975, loc=0, scale=1)
     
-    # # Multimodal curve
+    # # Multimodal (with projected subgradient descent) curve
     # mm_mean = np.mean(mm_regrets, axis=0)
     # mm_std = np.std(mm_regrets, axis=0)
     # plt.plot(mm_mean, label="Multimodal OSSB")
@@ -663,16 +679,16 @@ def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trial
     
     # Multimodal slsqp curve
     mmslsqp_mean = np.mean(mmslsqp_regrets, axis=0)
-    mmslsqp_std = 1.96/np.sqrt(num_trials)*np.std(mmslsqp_regrets, axis=0)
-    plt.plot(mmslsqp_mean, label="Multimodal OSSB")
+    mmslsqp_std = quantile/np.sqrt(num_trials)*np.std(mmslsqp_regrets, axis=0)
+    plt.plot(mmslsqp_mean, label="Multimodal OSSB", marker='o', markevery=num_trials/25)
     plt.fill_between(
         range(T), mmslsqp_mean - mmslsqp_std, mmslsqp_mean + mmslsqp_std,
         alpha=0.2
     )
     # Local curve
     local_mean = np.mean(local_regrets, axis=0)
-    local_std = 1.96/np.sqrt(num_trials)*np.std(local_regrets, axis=0)
-    plt.plot(local_mean, label="Local search OSSB")
+    local_std = quantile/np.sqrt(num_trials)*np.std(local_regrets, axis=0)
+    plt.plot(local_mean, label="Local search OSSB" ,marker='^', markevery=num_trials/25)
     plt.fill_between(
         range(T), local_mean - local_std, local_mean + local_std,
         alpha=0.2
@@ -681,8 +697,8 @@ def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trial
     
     # Classical curve
     classical_mean = np.mean(classical_regrets, axis=0)
-    classical_std = 1.96/np.sqrt(num_trials)*np.std(classical_regrets, axis=0)
-    plt.plot(classical_mean, label="Classical OSSB")
+    classical_std = quantile/np.sqrt(num_trials)*np.std(classical_regrets, axis=0)
+    plt.plot(classical_mean, label="Classical OSSB", marker='s', markevery=num_trials/25)
     plt.fill_between(
         range(T), classical_mean - classical_std,
         classical_mean + classical_std, alpha=0.2
