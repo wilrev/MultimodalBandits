@@ -6,8 +6,8 @@ from scipy import stats
 import time
 
 DEBUG = False
-RUN_REGRET_EXPERIMENT = False
 RUN_RUNTIME_EXPERIMENT = False
+RUN_REGRET_EXPERIMENT = False
 
 
 #__________________Helpful auxiliary functions__________________
