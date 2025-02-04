@@ -1,9 +1,7 @@
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
-import multimodalbandits_oldcode as mbo
-from math import inf
-from scipy.optimize import nnls, minimize, Bounds
+from scipy.optimize import minimize, Bounds
 from scipy import stats
 import time
 
