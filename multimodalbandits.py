@@ -216,7 +216,8 @@ def regression_all(G,mu,eta,N,nb_modes):
                  vstar = sum(eta*divergence(mu,lambdastar))
      else:
          neighborhood=modes_neighborhood(G,mu)
-         neighborhood.remove(kstar)
+         if kstar in neighborhood:
+             neighborhood.remove(kstar)
          for k in range(K):
              if k in neighborhood:
                  lambdastar_new=np.copy(mu)
@@ -636,30 +637,38 @@ class MultimodalOSSB:
 def run_trials(true_means, graph, m, K, T, strategy, num_trials):
     """Run multiple trials and collect regret histories."""
     all_regrets = []
-    t_init=time.time()
-    for trial in range(num_trials):
-        # Initialize bandit
-        bandit = MultimodalOSSB(
-            G=graph,
-            K=K,
-            T=T,
-            true_means=true_means,
-            m=m,
-            strategy=strategy
-        )
-        
-        # Run bandit algorithm
-        for t in range(T):
-            arm = bandit.select_arm(t)
-            reward = np.random.normal(bandit.true_means[arm], 1.0)
-            bandit.update(arm, reward)
+    t_init = time.time()
+    try:
+        for trial in range(num_trials):
+            # Initialize bandit
+            bandit = MultimodalOSSB(
+                G=graph,
+                K=K,
+                T=T,
+                true_means=true_means,
+                m=m,
+                strategy=strategy
+            )
             
-        # Store regret history
-        all_regrets.append(bandit.regret_history)
-        # Prints progress at each percent of the total number of trials
-        if trial%(num_trials/100) == 0 and strategy == "multimodal slsqp":
-            print("percentage done:",trial/num_trials,'time elapsed:',time.time()-t_init)
-        
+            # Run bandit algorithm
+            for t in range(T):
+                arm = bandit.select_arm(t)
+                reward = np.random.normal(bandit.true_means[arm], 1.0)
+                bandit.update(arm, reward)
+                
+            # Store regret history
+            all_regrets.append(bandit.regret_history)
+            if trial%(num_trials/100) == 0 and strategy == "multimodal slsqp":
+                print("percentage done:",trial/num_trials,'time elapsed:',time.time()-t_init)
+    
+    except Exception as e:
+        print(f"Error occurred during trial {len(all_regrets)}: {str(e)}")
+        if len(all_regrets) > 0:
+            print(f"Returning partial results from {len(all_regrets)} completed trials")
+            return np.array(all_regrets)
+        else:
+            raise e  # Re-raise if no trials completed
+            
     return np.array(all_regrets)
 
 def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trials):
@@ -718,7 +727,7 @@ if RUN_REGRET_EXPERIMENT:
     G = nx.path_graph(K)
     T = 500
     m = 2  # Allow 2 modes
-    true_means=generate_multimodal_function(G,[0,6],6,1)
+    true_means = generate_multimodal_function(G,[0,6],6,1)
     # mm_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
     #                         strategy="multimodal", num_trials=num_trials)
     mmslsqp_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
@@ -728,7 +737,12 @@ if RUN_REGRET_EXPERIMENT:
     classical_regrets = run_trials(true_means, G, m=m, K=K, T=T,
                                   strategy="classical", num_trials=num_trials)
     
-    
-    #Plot results
-    plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trials)
+    # If an error occured while running the experiment, run_trials still outputs regret history until that error
+    actual_trials = min(len(mmslsqp_regrets), len(local_regrets), len(classical_regrets))
+    print(f"Plotting results using {actual_trials} completed trials")
+
+    # Plot results using the actual number of completed trials
+    plot_results(mmslsqp_regrets[:actual_trials], 
+            local_regrets[:actual_trials], 
+            classical_regrets[:actual_trials], T, actual_trials)
     
