@@ -231,7 +231,7 @@ def regression_all(G,mu,eta,N,nb_modes):
                          p = list(m);p.remove(j);p.append(k)
                          lambda_new=np.copy(mu)
                          lambda_new[k]=mu[kstar]
-                         if vstar>sum(eta*divergence(mu,lambda_new)): #if this is not the case there is no point to test this case
+                         if vstar>sum(eta*divergence(mu,lambda_new)): # If this is not the case, it is unecessary to go further
                              lambdastar_new = regression_graph(G,mu,eta,p,k,N)
                              if (vstar > sum(eta*divergence(mu,lambdastar_new))):
                                  lambdastar = lambdastar_new
@@ -745,4 +745,3 @@ if RUN_REGRET_EXPERIMENT:
     plot_results(mmslsqp_regrets[:actual_trials], 
             local_regrets[:actual_trials], 
             classical_regrets[:actual_trials], T, actual_trials)
-    
