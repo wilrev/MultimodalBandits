@@ -414,7 +414,7 @@ def regression_graph(G,mu,eta,p,k,N):
         for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-i,1])
         for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
     lambdastar[k] = max(mu)
-    for ell in list(T.nodes()):
+    for ell in list(nx.topological_sort(T)): #old was list(T.nodes())
         if ell == k:
             continue
         # Find parent
@@ -1156,7 +1156,7 @@ for i in [6]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or 
    
 #NOTE: slow DP finds a better solution than new DP with the following example: 
     
-    # for i in [10]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
+    # for i in [10]:
     #     np.random.seed(i)
     #     print("Seed",i)
     #     K = 18    # Create a line graph with K nodes
@@ -1179,6 +1179,19 @@ for i in [6]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or 
     #         print("Optimal solution", np.round(lambdastarold,3))
     #         print("Value", vstar) 
     #         print("Value", vstarold) 
+    #         x = np.arange(len(mu))
+    #         plt.figure(figsize=(12, 6))
+    #         plt.plot(x, mu, marker='o', linestyle='-', label='Mu Function')
+    #         plt.plot(x, lambdastar, marker='x', linestyle='--', label='Optimal Solution (New Strategy)')
+    #         plt.plot(x, lambdastarold, marker='s', linestyle=':', label='Optimal Solution (Old Strategy)')
+    #         plt.xlabel('Index')
+    #         plt.ylabel('Mean')
+    #         plt.legend() # Display the legend
+    #         plt.grid(True) # Add a grid for better visualization
+    #         plt.xticks(x) # Ensure all x-axis ticks are displayed
+    #         plt.tight_layout() # Adjust layout to prevent labels from overlapping
+    #         plt.show()
     #         if 0:
     #             print("Computing time", end_new - start_new)
     #             print("Computing time", end_old - start_old)
+                
