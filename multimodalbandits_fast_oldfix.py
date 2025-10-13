@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize, Bounds
 from scipy import stats
 import time
+from tqdm import tqdm
 
 DEBUG = False
 RUN_RUNTIME_EXPERIMENT = False
@@ -1122,76 +1123,60 @@ if RUN_REGRET_EXPERIMENT:
             local_regrets[:actual_trials], 
             classical_regrets[:actual_trials], T, actual_trials)
 
-#for i in [3,6,14,16]:
-for i in [6]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
-    np.random.seed(i)
-    print("Seed",i)
-    K = 10    # Create a line graph with K nodes
+
+
+nb_trials = 100
+delta_value = np.zeros(nb_trials)
+print("Testing old vs new implementation of dynamic programming...")
+if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
+    K = 10    
     G = nx.path_graph(K)
     nb_modes = 2  # Allow 2 modes
     mu = generate_multimodal_function(G,[0,6],6,1)
-    N = 100
+    print("Graph edges",[e for e in G.edges])
+    print("Mu function", np.round(mu,3))
+    print("Modes", compute_modes(G,mu))
+elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
+    G = nx.balanced_tree(2,3)
+    K = G.number_of_nodes()
+    nb_modes = 2  # Allow 2 modes
+    mu = generate_multimodal_function(G,[0,14],6,0.5)
+    print("Graph edges",[e for e in G.edges])
+    print("Mu function", np.round(mu,3))
+    print("Modes", compute_modes(G,mu))
+elif 1: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (does not work for some seeds)
+    G = nx.balanced_tree(2,3)
+    K = G.number_of_nodes()
+    nb_modes = 2  # Allow 2 modes
+    mu = generate_multimodal_function(G,[0,6],6,0.5)
+    print("Graph edges",[e for e in G.edges])
+    print("Mu function", np.round(mu,3))
+    print("Modes", compute_modes(G,mu))
+
+N = 100
+for i in tqdm(range(nb_trials)): # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
+    np.random.seed(i)
     eta = np.random.rand(K)
     #mu=np.flip(mu) 
     #eta=np.flip(eta)
     #prior code worked when we flipped mu and eta, indicating an issue in the implementation
     #test new method vs old method
     start_new = time.time()
-    lambdastar, vstar = fast_dynamic_programming(G,mu,eta,N,nb_modes)
+    lambdastar,vstar= fast_dynamic_programming(G,mu,eta,N,nb_modes)
     end_new = time.time()
     start_old = time.time()
     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
     end_old = time.time()
-    #if (np.round(lambdastarold,3)!=np.round(lambdastar,3)).any() or (np.round(vstarold,3)!=np.round(vstar,3)).any():
-    if 1:
+    delta_value[i] = np.abs(vstar-vstarold)
+    if 0:
         print("Mu function", np.round(mu,3))
         print("New strategy vs Old strategy")
         print("Optimal solution", np.round(lambdastar,3))
         print("Optimal solution", np.round(lambdastarold,3))
         print("Value", vstar) 
         print("Value", vstarold) 
-        if 0:
-            print("Computing time", end_new - start_new)
-            print("Computing time", end_old - start_old)
-   
-#NOTE: slow DP finds a better solution than new DP with the following example: 
-    
-    # for i in [10]:
-    #     np.random.seed(i)
-    #     print("Seed",i)
-    #     K = 18    # Create a line graph with K nodes
-    #     G = nx.path_graph(K)
-    #     nb_modes = 4  # Allow 4 modes
-    #     mu = generate_multimodal_function(G,[1,4,9,14],9,1)
-    #     N = 100
-    #     eta = np.random.rand(K)
-    #     #test new method vs old method
-    #     start_new = time.time()
-    #     lambdastar, vstar = fast_dynamic_programming(G,mu,eta,N,nb_modes)
-    #     end_new = time.time()
-    #     start_old = time.time()
-    #     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
-    #     end_old = time.time()
-    #     if (np.round(lambdastarold,3)!=np.round(lambdastar,3)).any() or (np.round(vstarold,3)!=np.round(vstar,3)).any():
-    #         print("Mu function", np.round(mu,3))
-    #         print("New strategy vs Old strategy")
-    #         print("Optimal solution", np.round(lambdastar,3))
-    #         print("Optimal solution", np.round(lambdastarold,3))
-    #         print("Value", vstar) 
-    #         print("Value", vstarold) 
-    #         x = np.arange(len(mu))
-    #         plt.figure(figsize=(12, 6))
-    #         plt.plot(x, mu, marker='o', linestyle='-', label='Mu Function')
-    #         plt.plot(x, lambdastar, marker='x', linestyle='--', label='Optimal Solution (New Strategy)')
-    #         plt.plot(x, lambdastarold, marker='s', linestyle=':', label='Optimal Solution (Old Strategy)')
-    #         plt.xlabel('Index')
-    #         plt.ylabel('Mean')
-    #         plt.legend() # Display the legend
-    #         plt.grid(True) # Add a grid for better visualization
-    #         plt.xticks(x) # Ensure all x-axis ticks are displayed
-    #         plt.tight_layout() # Adjust layout to prevent labels from overlapping
-    #         plt.show()
-    #         if 0:
-    #             print("Computing time", end_new - start_new)
-    #             print("Computing time", end_old - start_old)
-                
+        print("Computing time", end_new - start_new)
+        print("Computing time", end_old - start_old)
+print("Number of tested seeds",nb_trials)
+print("Value difference new-old (max,min,mean,std)",max(delta_value),min(delta_value),sum(delta_value)/nb_trials, np.sqrt( sum(delta_value * delta_value)/nb_trials - (sum(delta_value)/nb_trials)**2))
+print("Seed with the largest discrapancy",np.argmax(delta_value))
