@@ -471,6 +471,107 @@ def regression_graph(G,mu,eta,p,k,N):
         check_modes(G,lambdastar,p)
     return(lambdastar)
 
+
+# older version with more minimal fix (not storing the winning children in v)
+
+# def regression_graph(G,mu,eta,p,k,N):
+# # Find the minimizer of the weighted divergence with set of peaks p and maximizer k on a line graph, discretization number N
+#     # Number of nodes
+#     K = mu.shape[0]
+#     # Best node
+#     kstar = np.argmax(mu)
+#     # Discretize the space of lambda with a grid of size N
+#     grid = np.linspace(np.min(mu),np.max(mu),N)
+#     # write the tree as rooted at k
+#     T = nx.bfs_tree(G, k)
+#     # Initialize the values of f,fstar,fsquare, lambdastar
+#     f = np.zeros([K,len(grid),2])
+#     fstar = np.zeros([K,N,2]) #(-1,+1)
+#     fsquare = np.zeros([K,N])
+#     v = np.zeros([K,N])
+#     lambdastar = np.zeros(mu.shape[0])
+#     # Loop over the nodes sorted by decreasing depth to compute the f values
+#     for ell in reversed(list(T.nodes())):
+#         # If ell is the maximizer of mu, then eta = +infty
+#         e = 10 ** 10 if (ell == kstar) else eta[ell] 
+#         # Compute the value of f
+#         for i,z in enumerate(grid): # f[ell,i,0]=f_ell(grid[i]=z,-1), f[ell,i,1]=f_ell(grid[i]=z,1)
+#             if ell in p: # ell can be a mode
+#                 f[ell,i,0] = e*divergence(mu[ell],z) 
+#                 f[ell,i,1] = e*divergence(mu[ell],z)
+#                 for j in T.successors(ell): 
+#                     f[ell,i,1] += fsquare[j,i]
+#                     f[ell,i,0] += fsquare[j,i]
+#             else: # ell cannot be a mode, and needs to have a neighbour whose reward is higher
+#                 f[ell,i,0] = e*divergence(mu[ell],z) 
+#                 for j in T.successors(ell): f[ell,i,0] += fsquare[j,i]
+#                 children = list(T.successors(ell)) 
+#                 if children:
+#                     f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in children]) + min([min(fstar[j,i,1],f[j,i,0]) - fsquare[j,i] for j in children])
+#                 else:
+#                     f[ell,i,1] = 10 ** 10
+#         # Compute the value of fstar and fsquare
+#         fstar[ell,0,0] = f[ell,0,0]
+#         for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0]) #min_{w \leq mu_*} [...] = fstar[ell,N-1,0]=min_{i=0,...,N-1} f[ell,i,0]
+#         fstar[ell,N-1,1] = 10**10
+#         for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-i,1])
+#         for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
+#     lambdastar[k] = max(mu)
+#     for ell in list(T.nodes()):
+#         if ell == k:
+#             continue
+#         # Find parent
+#         parent = next(T.predecessors(ell))        
+#         parent_grid_index = np.where(grid == lambdastar[parent])[0][0]
+        
+#         # Check if the value of ell is constrained by the past
+#         grandparent_list = list(T.predecessors(parent))
+#         ell_is_constrained = False
+#         if grandparent_list :
+#             grandparent = grandparent_list[0]
+#             if lambdastar[parent] > lambdastar[grandparent] and parent not in p:
+#                 child_terms = [
+#                     min(fstar[j, parent_grid_index, 1], f[j, parent_grid_index, 0]) - fsquare[j, parent_grid_index]
+#                     for j in T.successors(parent)
+#                 ]
+#                 min_child_index = np.argmin(child_terms)
+#                 constrained_child = list(T.successors(parent))[min_child_index]
+                
+#                 if ell == constrained_child:
+#                     ell_is_constrained = True
+        
+#         # Apply appropriate formula if ell is constrained
+#         if ell_is_constrained:
+#             # Ensure λ_ℓ is strictly greater than parent's λ
+#             if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
+#                 lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+#             else:
+#                 lambdastar[ell] = lambdastar[parent]
+#         else:
+#             # No constraint on ell
+#             if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
+#                 lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+#             else:
+#                 lambdastar[ell] = grid[np.argmin(f[ell, :parent_grid_index+1, 0])]
+#     # Debug information
+#     if DEBUG:    
+#         for ell in range(K):
+#             print("Node",ell)
+#             print("Can Be Mode", ell in p)
+#             print("f minus ",np.round(f[ell,:,0],3))
+#             print("f plus",np.round(f[ell,:,1],3))
+#             print("f star minus ",np.round(fstar[ell,:,0],3))
+#             print("f star plus",np.round(fstar[ell,:,1],3))
+#             print("f square",np.round(fsquare[ell,:],3))
+#             print("v", np.round(v[ell,:],3))
+#         print("Modes",p)
+#         print("Grid:",np.round(grid,3))
+#         print("Mu vector",np.round(mu,3))
+#         print("Eta vector",np.round(eta,3))
+#         print("Optimal Solution ",np.round(lambdastar,3))
+#         print("Optimal Value",np.round(fsquare[k,N-1],3))
+#         check_modes(G,lambdastar,p)
+#     return(lambdastar)
     
 def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
     # Compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
