@@ -427,15 +427,10 @@ def regression_graph(G,mu,eta,p,k,N):
         if grandparent_list :
             grandparent = grandparent_list[0]
             if lambdastar[parent] > lambdastar[grandparent] and parent not in p:
-                child_terms = [
-                    min(fstar[j, parent_grid_index, 1], f[j, parent_grid_index, 0]) - fsquare[j, parent_grid_index]
-                    for j in T.successors(parent)
-                ]
-                min_child_index = np.argmin(child_terms)
-                constrained_child = list(T.successors(parent))[min_child_index]
+                 constrained_child = v[parent, parent_grid_index]
                 
-                if ell == constrained_child:
-                    ell_is_constrained = True
+                 if ell == constrained_child:
+                     ell_is_constrained = True
         
         # Apply appropriate formula if ell is constrained
         if ell_is_constrained:
@@ -1147,6 +1142,7 @@ for i in [6]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or 
     start_old = time.time()
     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
     end_old = time.time()
+    #if (np.round(lambdastarold,3)!=np.round(lambdastar,3)).any() or (np.round(vstarold,3)!=np.round(vstar,3)).any():
     if 1:
         print("Mu function", np.round(mu,3))
         print("New strategy vs Old strategy")
@@ -1158,4 +1154,31 @@ for i in [6]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or 
             print("Computing time", end_new - start_new)
             print("Computing time", end_old - start_old)
    
-
+#NOTE: slow DP finds a better solution than new DP with the following example: 
+    
+    # for i in [10]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
+    #     np.random.seed(i)
+    #     print("Seed",i)
+    #     K = 18    # Create a line graph with K nodes
+    #     G = nx.path_graph(K)
+    #     nb_modes = 4  # Allow 4 modes
+    #     mu = generate_multimodal_function(G,[1,4,9,14],9,1)
+    #     N = 100
+    #     eta = np.random.rand(K)
+    #     #test new method vs old method
+    #     start_new = time.time()
+    #     lambdastar, vstar = fast_dynamic_programming(G,mu,eta,N,nb_modes)
+    #     end_new = time.time()
+    #     start_old = time.time()
+    #     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
+    #     end_old = time.time()
+    #     if (np.round(lambdastarold,3)!=np.round(lambdastar,3)).any() or (np.round(vstarold,3)!=np.round(vstar,3)).any():
+    #         print("Mu function", np.round(mu,3))
+    #         print("New strategy vs Old strategy")
+    #         print("Optimal solution", np.round(lambdastar,3))
+    #         print("Optimal solution", np.round(lambdastarold,3))
+    #         print("Value", vstar) 
+    #         print("Value", vstarold) 
+    #         if 0:
+    #             print("Computing time", end_new - start_new)
+    #             print("Computing time", end_old - start_old)
