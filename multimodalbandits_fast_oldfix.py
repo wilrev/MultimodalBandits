@@ -24,13 +24,14 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     # Computes explicitly the solution of PGL(k) when k is in the neighborhood of a mode or mu has strictly less than m modes, performs dynamic programming for the other k's
     lambdastar1 = np.ones(K)*np.max(mu)
     vstar1 = sum(eta*divergence(mu,lambdastar1)) 
-    if nb_modes > nb_modes: #if mu is strictly less than m-modal, we have no constraints besides lambda[k]=lambda[kstar] for k different than kstar
+    if nb_modes > len(M): #if mu is strictly less than m-modal, we have no constraints besides lambda[k]=lambda[kstar] for k different than kstar
          for k in [k_val for k_val in range(K) if k_val != kstar]:
              lambdastar_new=np.copy(mu)
              lambdastar_new[k]=mu[kstar]
              if (vstar1 > sum(eta*divergence(mu,lambdastar_new))):
                  lambdastar1 = lambdastar_new
                  vstar1 = sum(eta*divergence(mu,lambdastar1))
+         return (lambdastar1,vstar1)
     else:
         neighborhood=modes_neighborhood(G,mu)
         for k in [k_val for k_val in neighborhood if k_val != kstar]:
@@ -39,6 +40,9 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
             if (vstar1 > sum(eta*divergence(mu,lambdastar_new))):
                 lambdastar1 = lambdastar_new
                 vstar1 = sum(eta*divergence(mu,lambdastar1))
+        if nb_modes==1:
+            return (lambdastar1,vstar1)
+                
 # Case number 2: when the maximal entry of confusing parameter lambda does not lie in the neighbourhood of a mode of mu
     # Discretize the space of lambda with a grid of size N
     grid = np.linspace(np.min(mu),np.max(mu),N)
@@ -204,7 +208,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 #    elif (astar[ell] == 2):
 #         (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:],bstar[ell] ,cstar[ell]-1*(ell in M))
 #    print(vs,bs,cs)
-    return( (lambdastar,vstar) ) 
+    return (lambdastar,vstar)
 
             
 
