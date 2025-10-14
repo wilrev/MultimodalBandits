@@ -1142,38 +1142,48 @@ if RUN_REGRET_EXPERIMENT:
 nb_trials = 1000
 delta_value = np.zeros(nb_trials)
 print("Testing old vs new implementation of dynamic programming...")
-if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
-    K = 10    
-    G = nx.path_graph(K)
-    nb_modes = 2  # Allow 2 modes
-    mu = generate_multimodal_function(G,[0,6],6,1)
-    print("Graph edges",[e for e in G.edges])
-    print("Mu function", np.round(mu,3))
-    print("Modes", compute_modes(G,mu))
-elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
-    G = nx.balanced_tree(2,3)
-    K = G.number_of_nodes()
-    nb_modes = 2  # Allow 2 modes
-    mu = generate_multimodal_function(G,[0,14],6,0.5)
-    print("Graph edges",[e for e in G.edges])
-    print("Mu function", np.round(mu,3))
-    print("Modes", compute_modes(G,mu))
-elif 1: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
-    G = nx.balanced_tree(2,3)
-    K = G.number_of_nodes()
-    nb_modes = 2  # Allow 2 modes
-    mu = generate_multimodal_function(G,[0,6],6,0.5)
-    print("Graph edges",[e for e in G.edges])
-    print("Mu function", np.round(mu,3))
-    print("Modes", compute_modes(G,mu))
 
-N = 100
+N = 50
 for i in tqdm(range(nb_trials)): # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
     np.random.seed(i)
+    if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
+        K = 10    
+        G = nx.path_graph(K)
+        nb_modes = 2  # Allow 2 modes
+        mu = generate_multimodal_function(G,[0,6],6,1)
+        print("Graph edges",[e for e in G.edges])
+        print("Mu function", np.round(mu,3))
+        print("Modes", compute_modes(G,mu))
+    elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
+        G = nx.balanced_tree(2,3)
+        K = G.number_of_nodes()
+        nb_modes = 2  # Allow 2 modes
+        mu = generate_multimodal_function(G,[0,14],6,0.5)
+        print("Graph edges",[e for e in G.edges])
+        print("Mu function", np.round(mu,3))
+        print("Modes", compute_modes(G,mu))
+    elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
+        G = nx.balanced_tree(2,3)
+        K = G.number_of_nodes()
+        nb_modes = 2  # Allow 2 modes
+        mu = generate_multimodal_function(G,[0,6],6,0.5)
+        print("Graph edges",[e for e in G.edges])
+        print("Mu function", np.round(mu,3))
+        print("Modes", compute_modes(G,mu))
+    elif 1: #ternary tree with height 3 and 121 nodes and 4 modes chosen randomly (works)
+        G = nx.balanced_tree(3,4)
+        K = G.number_of_nodes()
+        set_modes = np.random.choice(K,size=5,replace=False)  
+        mu = generate_multimodal_function(G,set_modes,6,1)
+        nb_modes = len(compute_modes(G,mu))
+
     eta = np.random.rand(K)
-    #mu=np.flip(mu) 
-    #eta=np.flip(eta)
-    #prior code worked when we flipped mu and eta, indicating an issue in the implementation
+    if (i==0):
+        print("First instance (example)")
+        print("Graph edges",[e for e in G.edges])
+        print("Mu function", np.round(mu,3))
+        print("Modes", compute_modes(G,mu))
+
     #test new method vs old method
     start_new = time.time()
     DEBUG = False
