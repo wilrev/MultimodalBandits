@@ -11,7 +11,6 @@ RUN_RUNTIME_EXPERIMENT = False
 RUN_REGRET_EXPERIMENT = False
 
 
-
 def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 # Find the minimal value of the weighted divergence with m modes discretization number N
     # Set of modes of mu
@@ -25,30 +24,30 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     lambdastar1 = np.ones(K)*np.max(mu)
     vstar1 = sum(eta*divergence(mu,lambdastar1)) 
     if nb_modes > len(M): #if mu is strictly less than m-modal, we have no constraints besides lambda[k]=lambda[kstar] for k different than kstar
-         for k in [k_val for k_val in range(K) if k_val != kstar]:
-             lambdastar_new=np.copy(mu)
-             lambdastar_new[k]=mu[kstar]
-             if (vstar1 > sum(eta*divergence(mu,lambdastar_new))):
-                 lambdastar1 = lambdastar_new
-                 vstar1 = sum(eta*divergence(mu,lambdastar1))
-         return (lambdastar1,vstar1)
+          for k in [k_val for k_val in range(K) if k_val != kstar]:
+              lambdastar_new = np.copy(mu)
+              lambdastar_new[k]= mu[kstar]
+              if (vstar1 > sum(eta*divergence(mu,lambdastar_new))):
+                  lambdastar1 = lambdastar_new
+                  vstar1 = sum(eta*divergence(mu,lambdastar1))
+          return (lambdastar1,vstar1)
     else:
-        neighborhood=modes_neighborhood(G,mu)
+        neighborhood = modes_neighborhood(G,mu)
         for k in [k_val for k_val in neighborhood if k_val != kstar]:
-            lambdastar_new=np.copy(mu)
-            lambdastar_new[k]=mu[kstar]
+            lambdastar_new = np.copy(mu)
+            lambdastar_new[k] = mu[kstar]
             if (vstar1 > sum(eta*divergence(mu,lambdastar_new))):
                 lambdastar1 = lambdastar_new
                 vstar1 = sum(eta*divergence(mu,lambdastar1))
-        if nb_modes==1:
-            return (lambdastar1,vstar1)
+        if nb_modes == 1:
+            return (lambdastar1,vstar1) # this is the best solution in the unimodal setting
                 
 # Case number 2: when the maximal entry of confusing parameter lambda does not lie in the neighbourhood of a mode of mu
     # Discretize the space of lambda with a grid of size N
     grid = np.linspace(np.min(mu),np.max(mu),N)
-    # write the tree as rooted at k
+    # write the tree as rooted at kstar
     T = nx.bfs_tree(G, kstar)
-    # Initialize the values of h(ell,z,a,b,c),hminus(ell,z,b,c),hequal(ell,z,b,c),hplus(ell,z,b,c),hstar(ell,z,b,c) 
+    # Initialize the values of h(ell,z,a,b,c) ,hminus(ell,z,b,c), hequal(ell,z,b,c), hplus(ell,z,b,c), hstar(ell,z,b,c) 
     h = np.zeros([K,len(grid),3,2,2])
     hplus = np.zeros([K,len(grid),2,2])
     hminus = np.zeros([K,len(grid),2,2])
@@ -58,7 +57,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     hdelta = np.zeros([K,len(grid),2,2])
     # Loop over the nodes sorted by decreasing depth to compute the f values
     for ell in reversed(list(T.nodes())):
-        #to store the deltas
+        # to store the deltas
         g = np.zeros([np.size(T[ell]),2,2])
         # Compute the values of h(ell,z,a,b,c) using the values of descendents
         if not(T[ell]): # case 1: ell is a leaf, in this case the value is computable by hand
@@ -89,7 +88,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                                 h[ell,i,a,b,c] = div + fast_minimization(hstar[T[ell],i,:,:] + hdelta[ell,i,:,:],b,c-1*(ell in M))[0]
                             elif (a==2): 
                                 h[ell,i,a,b,c] = div + fast_minimization(hstar[T[ell],i,:,:],b,c-1*(ell in M))[0] 
-        # Compute the values of hminus(ell,z,b,c),hequal(ell,z,b,c),hplus(ell,z,b,c),hstar(ell,z,b,c) by appropriate minimization
+        # Compute the values of hminus(ell,z,b,c), hequal(ell,z,b,c), hplus(ell,z,b,c),hstar(ell,z,b,c) by appropriate minimization
         for b in range(2):
             for c in range(2):
                 hplus[ell,-1,b,c] = 10 ** 10 
@@ -100,7 +99,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                 for i in range(N): hstar[ell,i,b,c] =  min( hminus[ell,i,b,c]  , hequal[ell,i,b,c] , hplus[ell,i,b,c] )
                 for i in range(N): hplusequal[ell,i,b,c] =  min( hequal[ell,i,b,c] , hplus[ell,i,b,c] )
     
-    #initialize the values of the nodes flag
+    # initialize the values of the nodes flag
     istar = [0 for i in range(K)] 
     astar = [0 for i in range(K)]
     bstar = [0 for i in range(K)]
@@ -110,46 +109,52 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     bstar[kstar] = 1
     cstar[kstar] = 1
     astar[kstar] = 1 if (h[kstar,istar[kstar],1,bstar[kstar],cstar[kstar]] <  h[ kstar,istar[kstar],0,bstar[kstar],cstar[kstar] ] ) else 0
-    #compute the optimal solution using the values of h
+    theoretical_vstar2 = min(h[kstar, N-1, 0, 1, 1], h[kstar, N-1, 1, 1, 1])
+    print(f"\nDEBUG: Theoretical optimal value from forward pass (vstar2) = {theoretical_vstar2:.8f}")
+    # compute the optimal solution using the values of h
     for ell in list(T.nodes()):
-        if (T[ell]): #if node ell is not a leaf we find the value of the flags of its successors
+        children = list(T[ell])
+        if children: # if node ell is not a leaf we find the value of the flags of its successors
             if (astar[ell] == 0):
-                 (vs,bs,cs) = fast_minimization(hminus[T[ell],istar[ell],:,:],bstar[ell] -1*(ell not in M),cstar[ell])
-                 for i,v in enumerate(T[ell]):
+                  (vs,bs,cs) = fast_minimization(hminus[T[ell],istar[ell],:,:],bstar[ell] -1*(ell not in M),cstar[ell])
+                  for i,v in enumerate(children):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
                     istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
             elif (astar[ell] == 1):
-                 (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:] ,bstar[ell],cstar[ell]-1*(ell in M))
-                 wi = np.argmin([hplus[ w,istar[ell],bstar[w],cstar[w] ] - hstar[ w,istar[ell],bstar[w],cstar[w] ] for w in T[ell]])
-                 for i,v in enumerate(T[ell]):
+                  (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:] ,bstar[ell],cstar[ell]-1*(ell in M))
+                  wi = np.argmin([hplus[ w,istar[ell],bstar[w],cstar[w] ] - hstar[ w,istar[ell],bstar[w],cstar[w] ] for w in children])
+                  # gains = [hplus[children[i], istar[ell], bs[i], cs[i]] - hstar[children[i], istar[ell], bs[i], cs[i]] for i in range(len(children))]
+                  # wi = np.argmin(gains)
+                  for i,v in enumerate(children):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
                     if (i == wi): 
                         if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hplusequal[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                            istar[v] = np.argmin(  np.minimum(  h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <=  grid[istar[ell]]))
+                            istar[v] = np.argmin(  np.minimum(  h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <= grid[istar[ell]]))
                         else:
                             istar[v] = istar[ell]
                     else:
                         if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                            istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <=  grid[istar[ell]]))
+                            istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <= grid[istar[ell]]))
                         elif (hminus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
                             istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
                         else:
                             istar[v] = istar[ell]
+                              
             elif (astar[ell] == 2):
-                 (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:],bstar[ell],cstar[ell]-1*(ell in M))
-                 for i,v in enumerate(T[ell]):
-                    bstar[v] = bs[i]
-                    cstar[v] = cs[i]
-                    if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                        istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <=  grid[istar[ell]]))
-                    elif (hminus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                        istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
-                    else:
-                        istar[v] = istar[ell]
+                  (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:],bstar[ell],cstar[ell]-1*(ell in M))
+                  for i,v in enumerate(children):
+                      bstar[v] = bs[i]
+                      cstar[v] = cs[i]
+                      if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
+                          istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <=  grid[istar[ell]]))
+                      elif (hminus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
+                          istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
+                      else:
+                          istar[v] = istar[ell]
 
-            for i,v in enumerate(T[ell]):
+            for i,v in enumerate(children):
                 if (istar[v] <= istar[ell]):
                     astar[v] = 2
                 elif (h[ v,istar[v],1,bstar[v],cstar[v]] <  h[ v,istar[v],0,bstar[v],cstar[v] ] ):
@@ -158,7 +163,8 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                     astar[v] = 0
     lambdastar2 = np.array( [grid[istar[i]] for i in range(K) ])
     vstar2 =  np.sum(eta*divergence(mu,lambdastar2))
-#Choose the case with the lowest value between case 1 and case 2 and return the corresponding minimizer
+    print(f"DEBUG: Value from reconstructed lambda (vstar2_recalc) = {vstar2:.8f}")
+# Choose the case with the lowest value between case 1 and case 2 and return the corresponding minimizer
     if (vstar1 < vstar2):
         vstar = vstar1
         lambdastar = lambdastar1
@@ -1150,7 +1156,7 @@ if RUN_REGRET_EXPERIMENT:
 # for i in [779]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
 #     np.random.seed(i)
 #     if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
-#         K = 10    
+#         K = 10   
 #         G = nx.path_graph(K)
 #         nb_modes = 2  # Allow 2 modes
 #         mu = generate_multimodal_function(G,[0,6],6,1)
@@ -1226,7 +1232,7 @@ if RUN_REGRET_EXPERIMENT:
 # plt.xticks(x) 
 # plt.tight_layout() 
 # plt.show()
-# if 0:
+# if 1:
 #     print("Computing time", end_new - start_new)
 #     print("Computing time", end_old - start_old)     
     
@@ -1244,7 +1250,8 @@ def run_test():
         print(f"\n--- Testing Configuration: {config['name']} ---")
         K = config['K']
         
-        for i in tqdm(range(num_seeds_per_config)):
+        # for i in tqdm(range(num_seeds_per_config)): #7 fails over the whole range, seed 43 is one of them
+        for i in [43]:   
             np.random.seed(i)
 
             G = config['graph_func'](K)
@@ -1253,7 +1260,7 @@ def run_test():
             modes_to_set=[2,4]
             k_star = modes_to_set[0]
             mu = generate_multimodal_function(G, modes_to_set, k_star, config['sigma'])
-            
+            # mu[9]-=0.02 even when mu[9] != mu[10] we can have problems...
             actual_modes = compute_modes(G, mu)
             nb_modes_in_mu = len(actual_modes)
             
