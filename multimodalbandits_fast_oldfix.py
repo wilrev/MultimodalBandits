@@ -1139,74 +1139,169 @@ if RUN_REGRET_EXPERIMENT:
 
 
 
-nb_trials = 1000
-delta_value = np.zeros(nb_trials)
-print("Testing old vs new implementation of dynamic programming...")
+# nb_trials = 1000
+# delta_value = np.zeros(nb_trials)
+# print("Testing old vs new implementation of dynamic programming...")
+# N = 100
+# for i in [779]: # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
+#     np.random.seed(i)
+#     if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
+#         K = 10    
+#         G = nx.path_graph(K)
+#         nb_modes = 2  # Allow 2 modes
+#         mu = generate_multimodal_function(G,[0,6],6,1)
+#         print("Graph edges",[e for e in G.edges])
+#         print("Mu function", np.round(mu,3))
+#         print("Modes", compute_modes(G,mu))
+#     elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
+#         G = nx.balanced_tree(2,3)
+#         K = G.number_of_nodes()
+#         nb_modes = 2  # Allow 2 modes
+#         mu = generate_multimodal_function(G,[0,14],6,0.5)
+#         print("Graph edges",[e for e in G.edges])
+#         print("Mu function", np.round(mu,3))
+#         print("Modes", compute_modes(G,mu))
+#     elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
+#         G = nx.balanced_tree(2,3)
+#         K = G.number_of_nodes()
+#         nb_modes = 2  # Allow 2 modes
+#         mu = generate_multimodal_function(G,[0,6],6,0.5)
+#         print("Graph edges",[e for e in G.edges])
+#         print("Mu function", np.round(mu,3))
+#         print("Modes", compute_modes(G,mu))
+#     elif  1: #ternary tree with height 3 and 121 nodes and 4 modes chosen randomly (works)
+#         G = nx.balanced_tree(3,4)
+#         K = G.number_of_nodes()
+#         set_modes = np.random.choice(K,size=5,replace=False)  
+#         mu = generate_multimodal_function(G,set_modes,6,1)
+#         nb_modes = len(compute_modes(G,mu))
 
-N = 50
-for i in tqdm(range(nb_trials)): # previous counter examples: seed=6 with [0,6] peaks and K=10, or (simpler) seed=14 with [0,5] peaks and K=7
-    np.random.seed(i)
-    if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
-        K = 10    
-        G = nx.path_graph(K)
-        nb_modes = 2  # Allow 2 modes
-        mu = generate_multimodal_function(G,[0,6],6,1)
-        print("Graph edges",[e for e in G.edges])
-        print("Mu function", np.round(mu,3))
-        print("Modes", compute_modes(G,mu))
-    elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
-        G = nx.balanced_tree(2,3)
-        K = G.number_of_nodes()
-        nb_modes = 2  # Allow 2 modes
-        mu = generate_multimodal_function(G,[0,14],6,0.5)
-        print("Graph edges",[e for e in G.edges])
-        print("Mu function", np.round(mu,3))
-        print("Modes", compute_modes(G,mu))
-    elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
-        G = nx.balanced_tree(2,3)
-        K = G.number_of_nodes()
-        nb_modes = 2  # Allow 2 modes
-        mu = generate_multimodal_function(G,[0,6],6,0.5)
-        print("Graph edges",[e for e in G.edges])
-        print("Mu function", np.round(mu,3))
-        print("Modes", compute_modes(G,mu))
-    elif 1: #ternary tree with height 3 and 121 nodes and 4 modes chosen randomly (works)
-        G = nx.balanced_tree(3,4)
-        K = G.number_of_nodes()
-        set_modes = np.random.choice(K,size=5,replace=False)  
-        mu = generate_multimodal_function(G,set_modes,6,1)
-        nb_modes = len(compute_modes(G,mu))
+#     eta = np.random.rand(K)
+#     if (i==0):
+#         print("First instance (example)")
+#         print("Graph edges",[e for e in G.edges])
+#         print("Mu function", np.round(mu,3))
+#         print("Modes", compute_modes(G,mu))
 
-    eta = np.random.rand(K)
-    if (i==0):
-        print("First instance (example)")
-        print("Graph edges",[e for e in G.edges])
-        print("Mu function", np.round(mu,3))
-        print("Modes", compute_modes(G,mu))
+#     #test new method vs old method
+#     start_new = time.time()
+#     DEBUG = False
+#     lambdastar,vstar= fast_dynamic_programming(G,mu,eta,N,nb_modes)
+#     end_new = time.time()
+#     start_old = time.time()
+#     DEBUG = False
+#     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
+#     end_old = time.time()
+#     delta_value[i] = np.abs(vstar-vstarold)
+#     if 1:
+#         print("Mu function", np.round(mu,3))
+#         print("New strategy vs Old strategy")
+#         print("Optimal solution", np.round(lambdastar,3))
+#         print("Optimal solution", np.round(lambdastarold,3))
+#         print("Value", vstar) 
+#         print("Value", vstarold) 
+#         print("Computing time", end_new - start_new)
+#         print("Computing time", end_old - start_old)
+#         print(compute_modes(G,lambdastar))
+#         print(compute_modes(G,lambdastarold))
+# print("Number of tested seeds",nb_trials)
+# print("Value difference new-old (max,min,mean,std)",max(delta_value),min(delta_value),sum(delta_value)/nb_trials, np.sqrt( sum(delta_value * delta_value)/nb_trials - (sum(delta_value)/nb_trials)**2))
+# print("Seed with the largest discrepancy",np.argmax(delta_value))
+# plt.figure()
+# nx.draw(G,with_labels=True)
+# plt.show()
+# x = np.arange(len(mu))
+# plt.figure(figsize=(12, 6))
+# plt.plot(x, mu, marker='o', linestyle='-', label='Mu Function')
+# plt.plot(x, lambdastar, marker='x', linestyle='--', label='Optimal Solution (New Strategy)')
+# plt.plot(x, lambdastarold, marker='s', linestyle=':', label='Optimal Solution (Old Strategy)')
+# plt.xlabel('Index')
+# plt.ylabel('Mean')
+# plt.legend()
+# plt.grid(True) 
+# plt.xticks(x) 
+# plt.tight_layout() 
+# plt.show()
+# if 0:
+#     print("Computing time", end_new - start_new)
+#     print("Computing time", end_old - start_old)     
+    
+def run_test():
+    N = 50 
+    num_seeds_per_config = 50 # Number of random mu/eta trials for each setup
+    tolerance = 1e-8 
+    test_configurations = [
+        {'name': 'Balanced Binary Tree', 'K': 15, 'graph_func': lambda n: nx.balanced_tree(2, 3), 'num_modes': 2, 'sigma': 0.25},
+    ]
 
-    #test new method vs old method
-    start_new = time.time()
-    DEBUG = False
-    lambdastar,vstar= fast_dynamic_programming(G,mu,eta,N,nb_modes)
-    end_new = time.time()
-    start_old = time.time()
-    DEBUG = False
-    lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
-    end_old = time.time()
-    delta_value[i] = np.abs(vstar-vstarold)
-    if 0:
-        print("Mu function", np.round(mu,3))
-        print("New strategy vs Old strategy")
-        print("Optimal solution", np.round(lambdastar,3))
-        print("Optimal solution", np.round(lambdastarold,3))
-        print("Value", vstar) 
-        print("Value", vstarold) 
-        print("Computing time", end_new - start_new)
-        print("Computing time", end_old - start_old)
-        print(compute_modes(G,lambdastar))
-        print(compute_modes(G,lambdastarold))
-print("Number of tested seeds",nb_trials)
-print("Value difference new-old (max,min,mean,std)",max(delta_value),min(delta_value),sum(delta_value)/nb_trials, np.sqrt( sum(delta_value * delta_value)/nb_trials - (sum(delta_value)/nb_trials)**2))
-print("Seed with the largest discrepancy",np.argmax(delta_value))
-#nx.draw(G,with_labels=True)
-#plt.show()
+    failing_cases = []
+
+    for config in test_configurations:
+        print(f"\n--- Testing Configuration: {config['name']} ---")
+        K = config['K']
+        
+        for i in tqdm(range(num_seeds_per_config)):
+            np.random.seed(i)
+
+            G = config['graph_func'](K)
+            
+            num_modes_to_pick = min(K, config['num_modes'])
+            modes_to_set=[2,4]
+            k_star = modes_to_set[0]
+            mu = generate_multimodal_function(G, modes_to_set, k_star, config['sigma'])
+            
+            actual_modes = compute_modes(G, mu)
+            nb_modes_in_mu = len(actual_modes)
+            
+            eta = np.random.rand(K)
+
+            lambdastar_fast, vstar_fast = fast_dynamic_programming(G, mu, eta, N, nb_modes_in_mu)
+            lambdastar_slow, vstar_slow = regression_all(G, mu, eta, N, nb_modes_in_mu)
+
+            delta = vstar_fast - vstar_slow
+            if delta > tolerance:
+                print(f"\n\n{'='*10} DISCREPANCY FOUND {'='*10}")
+                print(f"Configuration         : {config['name']}")
+                print(f" Seed     : {i}")
+                print(f"Graph Edges           : {list(G.edges())}")
+                print(f"Intended Modes        : {modes_to_set}")
+                print(f"Actual Resulting Modes: {actual_modes} (Count: {nb_modes_in_mu})")
+                print(f"Optimal Arm k*        : {np.argmax(mu)}")
+                print(f"\nMu vector: \n{repr(np.round(mu,2))}")
+                print(f"Eta vector: \n{repr(np.round(eta,2))}")
+                print(f"Slow DP Value: {vstar_slow:.8f}",f"Fast DP Value: {vstar_fast:.8f}")
+                print(f"Discrepancy: {delta:.8f}")
+                print("\nSlow DP Solution:",np.round(lambdastar_slow, 2))
+                print("Fast DP Solution:",np.round(lambdastar_fast, 2))
+                
+                # Store info for final summary, break to stop testing this config
+                fail_info = {'config': config, 'seed': i, 'mu': mu, 'eta': eta, 
+                              'val_fast': vstar_fast, 'val_slow': vstar_slow,
+                              'sol_fast': lambdastar_fast, 'sol_slow': lambdastar_slow}
+                failing_cases.append(fail_info)
+                x = np.arange(len(mu))
+                plt.figure(figsize=(12, 6))
+                plt.plot(x, mu, marker='o', linestyle='-', label='mu')
+                plt.plot(x, lambdastar_fast, marker='x', linestyle='--', label='lambda_fast')
+                plt.plot(x, lambdastar_slow, marker='s', linestyle=':', label='lambda_slow')
+                plt.xlabel('Index')
+                plt.ylabel('Mean')
+                plt.legend() 
+                plt.grid(True) 
+                plt.xticks(x) 
+                plt.tight_layout()
+                plt.show()
+                #break
+        
+        if not any(f['config']['name'] == config['name'] for f in failing_cases):
+            print(f"Configuration PASSED")
+
+    print("Test finished")
+    if not failing_cases:
+        print("\nSUCCESS: All configurations passed without discrepancies.")
+    else:
+        print(f"\nFAILURE: {len(failing_cases)} configuration(s) failed.")
+
+run_test()
+    
+
