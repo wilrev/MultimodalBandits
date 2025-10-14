@@ -110,14 +110,14 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     for ell in list(T.nodes()):
         if (T[ell]): #if node ell is not a leaf we find the value of the flags of its successors
             if (astar[ell] == 0):
-                 (vs,bs,cs) = fast_minimization(hminus[T[ell],i,:,:],bstar[ell] -1*(ell not in M),cstar[ell])
+                 (vs,bs,cs) = fast_minimization(hminus[T[ell],istar[ell],:,:],bstar[ell] -1*(ell not in M),cstar[ell])
                  for i,v in enumerate(T[ell]):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
                     istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
             elif (astar[ell] == 1):
-                 (vs,bs,cs) = fast_minimization(hminus[T[ell],i,:,:],bstar[ell] ,cstar[ell]-1*(ell in M))
-                 wi = np.argmin([hplus[ w,:,bstar[w],cstar[w] ] - hstar[ w,:,bstar[w],cstar[w] ] for w in T[ell]])
+                 (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:] ,bstar[ell],cstar[ell]-1*(ell in M))
+                 wi = np.argmin([hplus[ w,istar[ell],bstar[w],cstar[w] ] - hstar[ w,istar[ell],bstar[w],cstar[w] ] for w in T[ell]])
                  for i,v in enumerate(T[ell]):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
@@ -134,7 +134,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                         else:
                             istar[v] = istar[ell]
             elif (astar[ell] == 2):
-                 (vs,bs,cs) = fast_minimization(hminus[T[ell],i,:,:],bstar[ell] ,cstar[ell]-1*(ell in M))
+                 (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:],bstar[ell],cstar[ell]-1*(ell in M))
                  for i,v in enumerate(T[ell]):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
@@ -148,7 +148,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
             for i,v in enumerate(T[ell]):
                 if (istar[v] <= istar[ell]):
                     astar[v] = 2
-                elif (h[ v,istar[v],2,bstar[v],cstar[v]] <  h[ v,istar[v],0,bstar[v],cstar[v] ] ):
+                elif (h[ v,istar[v],1,bstar[v],cstar[v]] <  h[ v,istar[v],0,bstar[v],cstar[v] ] ):
                     astar[v] = 1
                 else:
                     astar[v] = 0
@@ -170,7 +170,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
             print("Successors",T[ell])
             print("Is A Mode", ell in M)
             print("Is A Leaf", (not T[ell]))
-            print("Flags (z,a,b,c) = ",grid[istar[ell]],astar[ell],bstar[ell], cstar[ell])
+            print("Flags (i,grid[i],a,b,c) = ",istar[ell],grid[istar[ell]],astar[ell],bstar[ell], cstar[ell])
             for a in range(3): 
                 for b in range(2): 
                     for c in range(2): 
@@ -191,10 +191,22 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
         print("Grid:",np.round(grid,3))
         print("Mu vector",np.round(mu,3))
         print("Eta vector",np.round(eta,3))
+    
+#    print("Value found for Case 1",vstar1)
+#    print("Value found for Case 2",vstar2)
+#    print("Initial nodes values",h[kstar,istar[kstar],1,bstar[kstar],cstar[kstar]], h[ kstar,istar[kstar],0,bstar[kstar],cstar[kstar]] )
+#    ell = 2
+#    print("Decision for node",ell)
+#    if (astar[ell] == 0):
+#         (vs,bs,cs) = fast_minimization(hminus[T[ell],istar[ell],:,:],bstar[ell] -1*(ell not in M),cstar[ell])
+#    elif (astar[ell] == 1):
+#         (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:],bstar[ell] ,cstar[ell]-1*(ell in M))
+#    elif (astar[ell] == 2):
+#         (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:],bstar[ell] ,cstar[ell]-1*(ell in M))
+#    print(vs,bs,cs)
     return( (lambdastar,vstar) ) 
 
-
-
+            
 
 
 def fast_minimization(g,b,c):
@@ -250,11 +262,13 @@ def fast_minimization(g,b,c):
 
 def slow_minimization(g,b,c):
     vstar = 10 ** 10
+    n = g.shape[0]
     for i in range(n):
         for j in range(n): 
             bvec = [b if i == l else 0 for l in range(n) ] 
             cvec = [c if j == l else 0 for l in range(n) ] 
             s = sum([ g[l,bvec[l],cvec[l]] for l in range(n) ] )
+            print(bvec,cvec,s)
             if (s < vstar):
                 bstar = bvec
                 cstar = cvec
@@ -1125,7 +1139,7 @@ if RUN_REGRET_EXPERIMENT:
 
 
 
-nb_trials = 100
+nb_trials = 1000
 delta_value = np.zeros(nb_trials)
 print("Testing old vs new implementation of dynamic programming...")
 if 0: # Line graph with 10 nodes and 2 modes at 0 and 6 (works) 
@@ -1162,9 +1176,11 @@ for i in tqdm(range(nb_trials)): # previous counter examples: seed=6 with [0,6] 
     #prior code worked when we flipped mu and eta, indicating an issue in the implementation
     #test new method vs old method
     start_new = time.time()
+    DEBUG = False
     lambdastar,vstar= fast_dynamic_programming(G,mu,eta,N,nb_modes)
     end_new = time.time()
     start_old = time.time()
+    DEBUG = False
     lambdastarold,vstarold=regression_all(G,mu,eta,N,nb_modes)
     end_old = time.time()
     delta_value[i] = np.abs(vstar-vstarold)
@@ -1177,6 +1193,10 @@ for i in tqdm(range(nb_trials)): # previous counter examples: seed=6 with [0,6] 
         print("Value", vstarold) 
         print("Computing time", end_new - start_new)
         print("Computing time", end_old - start_old)
+        print(compute_modes(G,lambdastar))
+        print(compute_modes(G,lambdastarold))
 print("Number of tested seeds",nb_trials)
 print("Value difference new-old (max,min,mean,std)",max(delta_value),min(delta_value),sum(delta_value)/nb_trials, np.sqrt( sum(delta_value * delta_value)/nb_trials - (sum(delta_value)/nb_trials)**2))
-print("Seed with the largest discrapancy",np.argmax(delta_value))
+print("Seed with the largest discrepancy",np.argmax(delta_value))
+#nx.draw(G,with_labels=True)
+#plt.show()
