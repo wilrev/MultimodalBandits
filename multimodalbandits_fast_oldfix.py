@@ -1227,7 +1227,7 @@ if RUN_REGRET_EXPERIMENT:
 #     print("Computing time", end_old - start_old)     
     
 def run_test():
-    N = 50 
+    N = 100
     num_seeds_per_config = 50 # Number of random mu/eta trials for each setup
     tolerance = 1e-8 
     test_configurations = [
@@ -1301,7 +1301,8 @@ def run_test():
         print("\nSUCCESS: All configurations passed without discrepancies.")
     else:
         print(f"\nFAILURE: {len(failing_cases)} configuration(s) failed.")
-
+        plt.figure()
+        nx.draw(G,with_labels=True)
 run_test()
     
 
