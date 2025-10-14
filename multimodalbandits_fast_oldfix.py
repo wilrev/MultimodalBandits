@@ -1158,7 +1158,7 @@ elif 0: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
     print("Graph edges",[e for e in G.edges])
     print("Mu function", np.round(mu,3))
     print("Modes", compute_modes(G,mu))
-elif 1: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (does not work for some seeds)
+elif 1: #binary tree with height 3 and 14 nodes and 2 modes at 0 and 14 (works)
     G = nx.balanced_tree(2,3)
     K = G.number_of_nodes()
     nb_modes = 2  # Allow 2 modes
