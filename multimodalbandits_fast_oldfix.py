@@ -68,7 +68,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                         valid = (a != 1) and (b == (a==0)*(ell not in M) ) and (c == (a!=0)*(ell in M) )
                         for i,z in enumerate(grid): 
                             if (not valid) or (is_max and (i != N-1)):
-                                h[ ell,i,a,b,c ] = 10 ** 10
+                                h[ ell,i,a,b,c ] = 10**10
                             else:
                                 h[ ell,i,a,b,c ] = eta[ell]*divergence(mu[ell],z)
         else: #case 2: ell is an internal node 
@@ -81,7 +81,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                     for b in range(2): 
                         for c in range(2): 
                             is_max = ((a == 0) and (b==1) and (ell not in M)) 
-                            div = 10 ** 10 if is_max and (i != N-1) else eta[ell]*divergence(mu[ell],z)
+                            div = 10**10 if is_max and (i != N-1) else eta[ell]*divergence(mu[ell],z)
                             if (a==0):
                                 h[ell,i,a,b,c] = div + fast_minimization(hminus[T[ell],i,:,:],b -1*(ell not in M),c)[0]
                             elif (a==1): 
@@ -91,8 +91,8 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
         # Compute the values of hminus(ell,z,b,c), hequal(ell,z,b,c), hplus(ell,z,b,c),hstar(ell,z,b,c) by appropriate minimization
         for b in range(2):
             for c in range(2):
-                hplus[ell,-1,b,c] = 10 ** 10 
-                hminus[ell,0,b,c] = 10 ** 10 
+                hplus[ell,-1,b,c] = 10**10 
+                hminus[ell,0,b,c] = 10**10 
                 for i in range(1,N): hplus[ell,N-1-i,b,c] = min(hplus[ell,N-i,b,c], min( h[ell,N-i,0,b,c],h[ell,N-i,1,b,c])) 
                 for i in range(1,N): hminus[ell,i,b,c] = min(hminus[ell,i-1,b,c], h[ell,i-1,2,b,c]) 
                 for i in range(N): hequal[ell,i,b,c] = h[ell,i,2,b,c]
@@ -120,7 +120,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                   for i,v in enumerate(children):
                     bstar[v] = bs[i]
                     cstar[v] = cs[i]
-                    istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
+                    istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10**10)*(grid >=  grid[istar[ell]]))
             elif (astar[ell] == 1):
                   (vs,bs,cs) = fast_minimization(hstar[T[ell],istar[ell],:,:] + hdelta[T[ell],istar[ell],:,:] ,bstar[ell],cstar[ell]-1*(ell in M))
                   wi = np.argmin([hplus[ w,istar[ell],bstar[w],cstar[w] ] - hstar[ w,istar[ell],bstar[w],cstar[w] ] for w in children])
@@ -131,14 +131,14 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                     cstar[v] = cs[i]
                     if (i == wi): 
                         if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hplusequal[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                            istar[v] = np.argmin(  np.minimum(  h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <= grid[istar[ell]]))
+                            istar[v] = np.argmin(  np.minimum(  h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10**10)*(grid <= grid[istar[ell]]))
                         else:
                             istar[v] = istar[ell]
                     else:
                         if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                            istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <= grid[istar[ell]]))
+                            istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10**10)*(grid <= grid[istar[ell]]))
                         elif (hminus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                            istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
+                            istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10**10)*(grid >=  grid[istar[ell]]))
                         else:
                             istar[v] = istar[ell]
                               
@@ -148,9 +148,9 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                       bstar[v] = bs[i]
                       cstar[v] = cs[i]
                       if (hplus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                          istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10 * 10)*(grid <=  grid[istar[ell]]))
+                          istar[v] = np.argmin(  np.minimum(h[ v,:,0,bstar[v],cstar[v] ], h[ v,:,1,bstar[v],cstar[v] ])  +  (10**10)*(grid <=  grid[istar[ell]]))
                       elif (hminus[ v,istar[ell],bstar[v],cstar[v] ] ==  hstar[ v,istar[ell],bstar[v],cstar[v] ]  ):
-                          istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10 * 10)*(grid >=  grid[istar[ell]]))
+                          istar[v] = np.argmin(h[ v,:,2,bstar[v],cstar[v]]  +  (10**10)*(grid >=  grid[istar[ell]]))
                       else:
                           istar[v] = istar[ell]
 
@@ -221,7 +221,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 
 def fast_minimization(g,b,c):
 # Compute the minimization of sum_{v \in C(\ell)} g(b_v,c_v) across all ({\bf b},{\bf c}) \in B_ell(b,c) \times C_ell(b,c) using "fast minimization"
-    vstar = 10 ** 10
+    vstar = 10**10
     bstar = [0 for i in range( g.shape[0] )] 
     cstar = [0 for i in range( g.shape[0] )] 
     if (b==0) and (c==0):
@@ -271,7 +271,7 @@ def fast_minimization(g,b,c):
 
 
 def slow_minimization(g,b,c):
-    vstar = 10 ** 10
+    vstar = 10**10
     n = g.shape[0]
     for i in range(n):
         for j in range(n): 
@@ -403,7 +403,7 @@ def regression_graph(G,mu,eta,p,k,N):
     # Loop over the nodes sorted by decreasing depth to compute the f values
     for ell in reversed(list(nx.topological_sort(T))): #previously reversed(list(T.nodes())), could also use list(nx.dfs_postorder_nodes(T, source=k))
         # If ell is the maximizer of mu, then eta = +infty
-        e = 10 ** 10 if (ell == kstar) else eta[ell] 
+        e = 10**10 if (ell == kstar) else eta[ell] 
         # Compute the value of f
         for i,z in enumerate(grid): # f[ell,i,0]=f_ell(grid[i]=z,-1), f[ell,i,1]=f_ell(grid[i]=z,1)
             if ell in p: # ell can be a mode
@@ -431,7 +431,7 @@ def regression_graph(G,mu,eta,p,k,N):
                     # Compute f[ell,i,1] using the found minimum
                     f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in children]) + min_g_cost
                 else:
-                    f[ell,i,1] = 10 ** 10
+                    f[ell,i,1] = 10**10
         # Compute the value of fstar and fsquare
         fstar[ell,0,0] = f[ell,0,0]
         for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0]) #min_{w \leq mu^\star} [...] = fstar[ell,N-1,0]=min_{i=0,...,N-1} f[ell,i,0]
@@ -513,7 +513,7 @@ def regression_graph(G,mu,eta,p,k,N):
 #     # Loop over the nodes sorted by decreasing depth to compute the f values
 #     for ell in reversed(list(T.nodes())):
 #         # If ell is the maximizer of mu, then eta = +infty
-#         e = 10 ** 10 if (ell == kstar) else eta[ell] 
+#         e = 10**10 if (ell == kstar) else eta[ell] 
 #         # Compute the value of f
 #         for i,z in enumerate(grid): # f[ell,i,0]=f_ell(grid[i]=z,-1), f[ell,i,1]=f_ell(grid[i]=z,1)
 #             if ell in p: # ell can be a mode
@@ -529,7 +529,7 @@ def regression_graph(G,mu,eta,p,k,N):
 #                 if children:
 #                     f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in children]) + min([min(fstar[j,i,1],f[j,i,0]) - fsquare[j,i] for j in children])
 #                 else:
-#                     f[ell,i,1] = 10 ** 10
+#                     f[ell,i,1] = 10**10
 #         # Compute the value of fstar and fsquare
 #         fstar[ell,0,0] = f[ell,0,0]
 #         for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0]) #min_{w \leq mu_*} [...] = fstar[ell,N-1,0]=min_{i=0,...,N-1} f[ell,i,0]
@@ -1316,4 +1316,5 @@ def run_test():
         nx.draw(G,with_labels=True)
 run_test()
     
+
 
