@@ -238,7 +238,7 @@ def slow2_minimization(g, b, c):
 
 
 def fast_dynamic_programming(G,mu,eta,N,nb_modes):
-    # Find the minimal value of the weighted divergence with m modes discretization number N
+    # Find the minimal value of the weighted divergence with m modes, discretization number N
     M = compute_modes(G,mu)
     K = mu.shape[0]
     kstar = np.argmax(mu)
@@ -264,14 +264,14 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                 lambdastar1 = lambdastar_new
                 vstar1 = sum(eta*divergence(mu,lambdastar1))
         if nb_modes == 1:
-            return (lambdastar1,vstar1) # this is the best solution in the unimodal setting
+            return (lambdastar1,vstar1) # This is the best solution in the unimodal setting
 
     # Case number 2: when the maximal entry of confusing parameter lambda does not lie in the neighbourhood of a mode of mu
     # Discretize the space of lambda with a grid of size N
     grid = np.linspace(np.min(mu),np.max(mu),N)
     T = nx.bfs_tree(G, kstar)
 
-    # prepare arrays
+    # Initialize value arrays
     h = np.zeros([K,len(grid),3,2,2])
     hplus = np.zeros([K,len(grid),2,2])
     hminus = np.zeros([K,len(grid),2,2])
@@ -350,43 +350,41 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                             elif a == 2:
                                 h[ell,i,a,b,c] = div + fast_minimization(hstar[children,i,:,:], b, c-1*(ell in M))[0]
 
+
+
         # Compute the aggregated tables and store pointers for backtracking
         for b in range(2):
             for c in range(2):
                 # Compute hplus and store pointer
                 # Base case: i = N-1
-                hplus[ell, N-1, b, c] = min(h[ell, N-1, 0, b, c], h[ell, N-1, 1, b, c])
-                ptr_hplus[ell, N-1, b, c] = N - 1
-
-                # Iterate downwards from i = N-2 to 0
-                for i in range(N - 2, -1, -1):
-                    val_from_h_at_i = min(h[ell, i, 0, b, c], h[ell, i, 1, b, c])
-                    val_from_prev_hplus = hplus[ell, i + 1, b, c]
-
-                    if val_from_h_at_i <= val_from_prev_hplus:
-                        hplus[ell, i, b, c] = val_from_h_at_i
-                        ptr_hplus[ell, i, b, c] = i
-                    else:
-                        hplus[ell, i, b, c] = val_from_prev_hplus
-                        ptr_hplus[ell, i, b, c] = ptr_hplus[ell, i + 1, b, c]
+                hplus[ell, N-1, b, c] = 1e10
+                ptr_hplus[ell, N-1, b, c] = -1
                 
+                # Iterate downwards from i = N-2 to 0
+                for i in range(N-2, -1, -1):
+                    val_from_ip1 = min(h[ell, i+1, 0, b, c], h[ell, i+1, 1, b, c])
+                    if val_from_ip1 <= hplus[ell, i+1, b, c]:
+                        hplus[ell, i, b, c] = val_from_ip1
+                        ptr_hplus[ell, i, b, c] = i + 1
+                    else:
+                        hplus[ell, i, b, c] = hplus[ell, i+1, b, c]
+                        ptr_hplus[ell, i, b, c] = ptr_hplus[ell, i+1, b, c]
+
                 # Compute hminus and store pointer
                 # Base case: i = 0
-                hminus[ell, 0, b, c] = h[ell, 0, 2, b, c]
-                ptr_hminus[ell, 0, b, c] = 0
-
+                hminus[ell, 0, b, c] = 1e10
+                ptr_hminus[ell, 0, b, c] = -1
+                
                 # Iterate upwards from i = 1 to N-1
                 for i in range(1, N):
-                    val_from_h_at_i = h[ell, i, 2, b, c]
-                    val_from_prev_hminus = hminus[ell, i - 1, b, c]
-                    
-                    if val_from_h_at_i <= val_from_prev_hminus:
-                        hminus[ell, i, b, c] = val_from_h_at_i
-                        ptr_hminus[ell, i, b, c] = i
+                    val_from_im1 = h[ell, i-1, 2, b, c]
+                    if val_from_im1 <= hminus[ell, i-1, b, c]:
+                        hminus[ell, i, b, c] = val_from_im1
+                        ptr_hminus[ell, i, b, c] = i - 1
                     else:
-                        hminus[ell, i, b, c] = val_from_prev_hminus
-                        ptr_hminus[ell, i, b, c] = ptr_hminus[ell, i - 1, b, c]
-                
+                        hminus[ell, i, b, c] = hminus[ell, i-1, b, c]
+                        ptr_hminus[ell, i, b, c] = ptr_hminus[ell, i-1, b, c]
+
                 # Compute hequal, hstar, hplusequal
                 for i in range(N):
                     hequal[ell,i,b,c] = h[ell,i,2,b,c]
