@@ -9,7 +9,8 @@ This repository contains the Python code used for the runtime and regret experim
 3) Improved DP algorithm (see Appendix E in the paper)
 4) subgradient descent procedure
 5) OSSB implementation
-6) Experiments from the paper 
+6) Experiments from the paper
+   
 ➤ The flags RUNTIME_EXPERIMENT, RUNTIME_IMPROVED_DP_EXPERIMENT, REGRET_EXPERIMENT can be set to True to run the experiments of Section 6 and Appendix E.8.
 
 <!-- LICENSE -->
