@@ -20,8 +20,8 @@ This repository contains the Python code used for the runtime and regret experim
 
 
 
-<!--- ## 📬 Contact
+##  Contact
 Feel free to contact the authors:
 William Réveillard wilrev@kth.se
 Richard Combes richard.combes@centralesupelec.fr
- -->
+
