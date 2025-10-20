@@ -11,9 +11,9 @@ from matplotlib.lines import Line2D
 from joblib import Parallel, delayed
 
 DEBUG = False
-RUN_RUNTIME_EXPERIMENT = False
-RUN_RUNTIME_DP = False
-RUN_REGRET_EXPERIMENT = True
+RUNTIME_EXPERIMENT = False
+RUNTIME_IMPROVED_DP_EXPERIMENT = False
+REGRET_EXPERIMENT = True
 
 
 #__________________Helpful auxiliary functions__________________
@@ -698,7 +698,109 @@ def slsqp(G,mu,N,nb_modes): # Minimizing function from python, can be used inste
     return(sol)
 
 
+#__________________OSSB implementation__________________
+
+class MultimodalOSSB:
+    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal"):
+        """
+        Args:
+            G: NetworkX graph structure
+            K: Number of arms
+            T: Time horizon
+            m: Number of modes allowed
+            N: Number of discretization points (default=100)
+            I: Subgradient descent iterations (default=100)
+            strategy : 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local' or 'classical' (classical uses the Graves-Lai solution for bandits without structure)
+        """
+        self.G = G
+        self.K = K
+        self.T = T
+        self.m = m
+        self.N = N
+        self.I = I
+        self.strategy = strategy
+        
+        # True means and optimal mean (for regret calculation)
+        self.true_means = np.asarray(true_means)
+        self.optimal_mean = np.max(self.true_means)
+        self.cumulative_regret = 0.0
+        self.regret_history = []  # Stores regret at each timestep
+        
+        # Track empirical means and pull counts
+        self.mu_hat = np.zeros(K)
+        self.N_pulls = np.zeros(K, dtype=int)
+        
+    def classical_eta(self):
+        # Classical Graves-Lai exploration rates (1 / divergence)
+        kstar = np.argmax(self.mu_hat)
+        Delta = self.mu_hat[kstar] - self.mu_hat
+        eta = np.zeros(self.K)
+        for k in range(self.K):
+            if k != kstar and Delta[k] > 0:
+                eta[k] = 1 / (divergence(self.mu_hat[k], self.mu_hat[kstar]))
+        return eta
+    
+    def local_eta(self):
+        # local search rates (1 / divergence in the neighborhood of modes)
+        kstar = np.argmax(self.mu_hat)
+        Delta = self.mu_hat[kstar] - self.mu_hat
+        eta = np.zeros(self.K)
+        neighborhood=modes_neighborhood(self.G,self.mu_hat)
+        for k in range(self.K):
+            if k in neighborhood and k != kstar and Delta[k] > 0:
+                eta[k] = 1 / (divergence(self.mu_hat[k], self.mu_hat[kstar]))
+        return eta
+
+    def select_arm(self, t):
+        # Select arm using the desired strategy
+        if self.strategy == "classical":
+            eta = self.classical_eta()
+        elif self.strategy == "local":
+            eta = self.local_eta()
+        elif self.strategy == "multimodal":
+            eta, _ = subgradient_descent(
+                G=self.G,
+                mu=self.mu_hat,
+                N=self.N,
+                I=self.I,
+                nb_modes=self.m
+            )
+        elif self.strategy == "multimodal slsqp":
+            eta = slsqp( 
+                G=self.G,
+                mu=self.mu_hat,
+                N=self.N,
+                nb_modes=self.m).x
+        else:
+            raise ValueError(f"Unknown strategy: {self.strategy}")
+            
+        exploration_done = all(
+            self.N_pulls[k] >= eta[k] * np.log(t + 1)
+            for k in range(self.K)
+        )
+        
+        return (np.argmax(self.mu_hat) if exploration_done 
+                else np.argmin(self.N_pulls/(eta + 1e-10)))
+
+
+    def update(self, arm, reward):
+        # Update statistics after arm pull
+        n = self.N_pulls[arm]
+        self.N_pulls[arm] += 1    
+        self.mu_hat[arm] = (n*self.mu_hat[arm]+reward)/(n+1)
+        instant_regret = self.optimal_mean - self.true_means[arm]
+        self.cumulative_regret += instant_regret
+        self.regret_history.append(self.cumulative_regret)
+        
+    def get_regret(self):
+        # Return cumulative regret up to the current timestep
+        return self.cumulative_regret
+
+
+
 #__________________Experiments from the paper__________________
+
+# Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
 def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
     results = {}
@@ -786,7 +888,7 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
     
     return results, plot_data
 
-if RUN_RUNTIME_EXPERIMENT:
+if RUNTIME_EXPERIMENT:
     num_trials = 5
     n_arms_list = [20,25,30,35,40,45,50,55,60,65,70]
     n_modes_list = [2, 3, 4, 5]
@@ -876,6 +978,9 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
 # print(f"Number of arms: {x_values}")
 # print(f"Average runtimes: {y_values}")
 
+
+
+# Runtime experiment (Original DP vs Improved DP)
 
 def runtime_DP_single_trial(trial_seed, N, num_modes, name, graph_func, K):
 
@@ -993,108 +1098,11 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
 
     return df
 
-if RUN_RUNTIME_DP:
+if RUNTIME_IMPROVED_DP_EXPERIMENT:
     runtime_DP()
 
-#__________________OSSB implementation__________________
 
-class MultimodalOSSB:
-    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal"):
-        """
-        Args:
-            G: NetworkX graph structure
-            K: Number of arms
-            T: Time horizon
-            m: Number of modes allowed
-            N: Number of discretization points (default=100)
-            I: Subgradient descent iterations (default=100)
-            strategy : 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local' or 'classical' (classical uses the Graves-Lai solution for bandits without structure)
-        """
-        self.G = G
-        self.K = K
-        self.T = T
-        self.m = m
-        self.N = N
-        self.I = I
-        self.strategy = strategy
-        
-        # True means and optimal mean (for regret calculation)
-        self.true_means = np.asarray(true_means)
-        self.optimal_mean = np.max(self.true_means)
-        self.cumulative_regret = 0.0
-        self.regret_history = []  # Stores regret at each timestep
-        
-        # Track empirical means and pull counts
-        self.mu_hat = np.zeros(K)
-        self.N_pulls = np.zeros(K, dtype=int)
-        
-    def classical_eta(self):
-        # Classical Graves-Lai exploration rates (1 / divergence)
-        kstar = np.argmax(self.mu_hat)
-        Delta = self.mu_hat[kstar] - self.mu_hat
-        eta = np.zeros(self.K)
-        for k in range(self.K):
-            if k != kstar and Delta[k] > 0:
-                eta[k] = 1 / (divergence(self.mu_hat[k], self.mu_hat[kstar]))
-        return eta
-    
-    def local_eta(self):
-        # local search rates (1 / divergence in the neighborhood of modes)
-        kstar = np.argmax(self.mu_hat)
-        Delta = self.mu_hat[kstar] - self.mu_hat
-        eta = np.zeros(self.K)
-        neighborhood=modes_neighborhood(self.G,self.mu_hat)
-        for k in range(self.K):
-            if k in neighborhood and k != kstar and Delta[k] > 0:
-                eta[k] = 1 / (divergence(self.mu_hat[k], self.mu_hat[kstar]))
-        return eta
-
-    def select_arm(self, t):
-        # Select arm using the desired strategy
-        if self.strategy == "classical":
-            eta = self.classical_eta()
-        elif self.strategy == "local":
-            eta = self.local_eta()
-        elif self.strategy == "multimodal":
-            eta, _ = subgradient_descent(
-                G=self.G,
-                mu=self.mu_hat,
-                N=self.N,
-                I=self.I,
-                nb_modes=self.m
-            )
-        elif self.strategy == "multimodal slsqp":
-            eta = slsqp( 
-                G=self.G,
-                mu=self.mu_hat,
-                N=self.N,
-                nb_modes=self.m).x
-        else:
-            raise ValueError(f"Unknown strategy: {self.strategy}")
-            
-        exploration_done = all(
-            self.N_pulls[k] >= eta[k] * np.log(t + 1)
-            for k in range(self.K)
-        )
-        
-        return (np.argmax(self.mu_hat) if exploration_done 
-                else np.argmin(self.N_pulls/(eta + 1e-10)))
-
-
-    def update(self, arm, reward):
-        # Update statistics after arm pull
-        n = self.N_pulls[arm]
-        self.N_pulls[arm] += 1    
-        self.mu_hat[arm] = (n*self.mu_hat[arm]+reward)/(n+1)
-        instant_regret = self.optimal_mean - self.true_means[arm]
-        self.cumulative_regret += instant_regret
-        self.regret_history.append(self.cumulative_regret)
-        
-    def get_regret(self):
-        # Return cumulative regret up to the current timestep
-        return self.cumulative_regret
-
-
+# Regret Experiment (multimodal OSSB vs local/classical OSSB)
 
 def run_trials(true_means, graph, m, K, T, strategy, num_trials):
     all_regrets = []
@@ -1170,12 +1178,12 @@ def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trial
     plt.show()
     
     
-if RUN_REGRET_EXPERIMENT:
-    num_trials = 10
+if REGRET_EXPERIMENT:
+    num_trials = 50
     K = 7
     # Create a line graph with K nodes
     G = nx.path_graph(K)
-    T = 100
+    T = 500
     m = 2  # Allow 2 modes
     true_means = generate_multimodal_function(G,[0,6],6,1)
     # mm_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
