@@ -1,5 +1,4 @@
-# Code for Multimodal Bandits: Regret Lower Bounds and
-Optimal Algorithms
+# Code for Multimodal Bandits: Regret Lower Bounds and Optimal Algorithms
 
 This repository contains the Python code used for the runtime and regret experiments in the paper. 
 
