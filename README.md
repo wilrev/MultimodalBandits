@@ -13,7 +13,6 @@ This repository contains the Python code used for the runtime and regret experim
    
 ➤ The flags RUNTIME_EXPERIMENT, RUNTIME_IMPROVED_DP_EXPERIMENT, REGRET_EXPERIMENT can be set to True to run the experiments of Section 6 and Appendix E.8.
 
-<!-- LICENSE -->
 ## License
 
 <a href="https://choosealicense.com/licenses/mit/">MIT</a> License.
@@ -22,6 +21,8 @@ This repository contains the Python code used for the runtime and regret experim
 
 ##  Contact
 Feel free to contact the authors:
+
 William Réveillard wilrev@kth.se
+
 Richard Combes richard.combes@centralesupelec.fr
 
