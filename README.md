@@ -7,7 +7,7 @@ This repository contains the Python code used for the runtime and regret experim
 1) Helpful auxiliary functions
 2) Main DP algorithm
 3) Improved DP algorithm (see Appendix E in the paper)
-4) subgradient descent procedure
+4) Subgradient descent procedure
 5) OSSB implementation
 6) Experiments from the paper
    
