@@ -11,7 +11,7 @@ This repository contains the Python code used for the runtime and regret experim
 5) OSSB implementation
 6) Experiments from the paper
    
-➤ The flags RUNTIME_EXPERIMENT, RUNTIME_IMPROVED_DP_EXPERIMENT, REGRET_EXPERIMENT can be set to True to run the experiments of Section 6, Appendix A.2 and Appendix E.8.
+➤ The flags RUNTIME_EXPERIMENT, RUNTIME_IMPROVED_DP_EXPERIMENT and REGRET_EXPERIMENT can be set to True to run the experiments of Appendix A.2, Appendix E.8 and Section 6 respectively.
 
 ## License
 
