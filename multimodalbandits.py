@@ -10,7 +10,6 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 from joblib import Parallel, delayed
 
-DEBUG = False
 RUNTIME_EXPERIMENT = False
 RUNTIME_IMPROVED_DP_EXPERIMENT = False
 REGRET_EXPERIMENT = False
@@ -50,7 +49,6 @@ def generate_multimodal_function(G,m,mmax,sigma):
     for j in m:
         for i,_ in enumerate(mu):
             mu[i] = mu[i] + (1 + (j == mmax))*np.exp(-(1/(sigma))*d[i][j])
-    if DEBUG: print('Reward function: ', np.round(mu,3))
     return(mu)
 
 def generate_spread_out_modes(n_arms, n_modes): 
@@ -529,8 +527,6 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     cstar[kstar] = 1
     astar[kstar] = 0
     theoretical_vstar2 = h[kstar, N-1, 0, 1, 1]
-    if DEBUG:
-        print(f"\nDEBUG: Theoretical optimal value from forward pass (vstar2) = {theoretical_vstar2:.8f}")
 
     # Compute the optimal solution using stored pointers where needed
     for ell in list(T.nodes()):
@@ -608,8 +604,6 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 
     lambdastar2 = np.array([grid[istar[i]] for i in range(K)])
     vstar2 = np.sum(eta*divergence(mu,lambdastar2))
-    if DEBUG:
-        print(f"DEBUG: Value from reconstructed lambda (vstar2_recalc) = {vstar2:.8f}")
 
     # pick the best of cases 1 and 2
     if vstar1 < vstar2:
@@ -624,8 +618,10 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 
 #__________________Projected subgradient descent__________________
 
-def subgradient_descent(G,mu,N,I,nb_modes):
+def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
     # Uses values of penalization and step size suggested by the analysis
+    if timed:
+        start_time=time.time()
     kstar = np.argmax(mu)
     Delta = mu[kstar] - mu    
     K=mu.shape[0]
@@ -640,7 +636,7 @@ def subgradient_descent(G,mu,N,I,nb_modes):
             if 2*Delta[k]*eta[k] > gamma:
                 gamma=2*Delta[k]*eta[k]               
     B=eta.dot(Delta)/np.min(non_zero_gaps)
-    C=np.linalg.norm(Delta)+gamma*K**(3/2)*(mu[kstar]-np.min(mu))**2 # for gaussian distributions with variance 1 we can take A(mu)=mu^*-mu_*
+    C=np.linalg.norm(Delta)+gamma*K**(3/2)*(mu[kstar]-np.min(mu))**2 #for gaussian distributions we can take A(mu)=mu^*-mu_*
     eta_mean = eta/I
     delta=np.sqrt(K*B**2/(I*C**2))
     for i in range(I-1):
@@ -652,7 +648,13 @@ def subgradient_descent(G,mu,N,I,nb_modes):
     eta_mean[kstar] = 0
     (lambdastar,vstar) = regression_all(G,mu,eta_mean,N,nb_modes)
     eta_final=eta_mean/sum(eta_mean*divergence(mu,lambdastar))
-    return(eta_final,sum(eta_final*Delta))
+    
+    if timed:
+        end_time = time.time()
+        runtime = end_time - start_time
+        return(eta_final,sum(eta_final*Delta),runtime)
+    else:
+        return(eta_final,sum(eta_final*Delta))
 
 def slsqp(G,mu,N,nb_modes,local=False,eta0_guess=None): # Minimizing function from python, can be used instead of subgradient descent.
     # If local=True, computes optimal rates under a local search constraint
@@ -848,7 +850,7 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
                         modes = generate_spread_out_modes(n_arms, n_modes)
                         
                         max_mode = np.random.choice(modes)
-                        mu = generate_multimodal_function(G, modes, max_mode, 1)
+                        mu = generate_multimodal_function(G, modes, max_mode, 2)
                         
                         max_mu = np.max(mu)
                         for mode in modes:
@@ -857,7 +859,7 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
                         print(f"Generated modes: {modes}")
                         print(f"Max mode: {max_mode}")
                         print(f"Generated mu (after adjustment): {mu}")
-                        _, _, runtime = subgradient_descent_timed(G, mu, N, 100, n_modes) #100 iterations of subgradient descent
+                        _, _, runtime = subgradient_descent(G, mu, N, 100, n_modes,timed=True) # 100 iterations of subgradient descent
                         results[key].append(runtime)
                             
     # Calculate average runtimes and store plot data
@@ -1000,7 +1002,7 @@ def runtime_DP_single_trial(trial_seed, N, num_modes, name, graph_func, K):
     k_star = np.random.randint(K)
     
     modes_to_set = get_random_modes(G, num_modes, k_star)
-    mu = generate_multimodal_function(G, modes_to_set, k_star, 1.0)
+    mu = generate_multimodal_function(G, modes_to_set, k_star, 2)
     eta = np.random.rand(K)
     nb_modes_in_mu = len(compute_modes(G, mu))
 
@@ -1179,8 +1181,6 @@ def plot_results(mmslsqp_regrets, localslsqp_regrets, classical_regrets, T, num_
     plt.grid(True)
     plt.show()
     
-    
-
 
 if REGRET_EXPERIMENT: 
     DOUBLING_SCHEDULE = True # Set to True to solve P_GL every 2^k iterations, and to False to solve P_GL at every step. 
