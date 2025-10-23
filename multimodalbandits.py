@@ -13,8 +13,7 @@ from joblib import Parallel, delayed
 DEBUG = False
 RUNTIME_EXPERIMENT = False
 RUNTIME_IMPROVED_DP_EXPERIMENT = False
-REGRET_EXPERIMENT = True
-
+REGRET_EXPERIMENT = False
 
 #__________________Helpful auxiliary functions__________________
 
@@ -35,14 +34,6 @@ def modes_neighborhood(G,mu):
                     f.append(k)
     f.sort()
     return(f)
-
-def check_modes(G,mu,m):
-# Check that the set of modes of mu is equal to M
-    f = []
-    for i in range(mu.shape[0]):
-        if (mu[i]- max([mu[k] for k in G[i]]) > 0):
-            f.append(i)
-    if DEBUG: print('Modes location check:', f == m)
     
 def generate_line_graph(n):
 # Generate a line graph with n nodes
@@ -51,14 +42,14 @@ def generate_line_graph(n):
         G.add_edge(i,i+1)
     return(G)
         
-def generate_multimodal_function(G,m,mmax,sigma2):
+def generate_multimodal_function(G,m,mmax,sigma):
 # Generate a multimodal function over graph G with sets of modes m using a gaussian mixture function
-# Note: if sigma2 is too large, the gaussian peaks might "merge" so that the generated function is less than len(m)-multimodal
+# Note: if sigma is too large, the gaussian peaks might "merge" so that the generated function is less than len(m)-multimodal
     mu = np.zeros(G.number_of_nodes())
     d = dict(nx.all_pairs_shortest_path_length(G))
     for j in m:
         for i,_ in enumerate(mu):
-            mu[i] = mu[i] + (1 + (j == mmax))*np.exp(-(0.5/(sigma2))*d[i][j])
+            mu[i] = mu[i] + (1 + (j == mmax))*np.exp(-(1/(sigma))*d[i][j])
     if DEBUG: print('Reward function: ', np.round(mu,3))
     return(mu)
 
@@ -114,112 +105,148 @@ def divergence(mu,lam):
 #__________________Main dynamic programming algorithm__________________
 
 
-def regression_graph(G,mu,eta,p,k,N):
-# Find the minimizer of the weighted divergence with set of peaks p and maximizer k on a line graph, discretization number N
-    # Number of nodes
-    K = mu.shape[0]
-    # Best node
-    kstar = np.argmax(mu)
-    # Discretize the space of lambda with a grid of size N
-    grid = np.linspace(np.min(mu),np.max(mu),N)
-    # write the tree as rooted at k
-    T = nx.bfs_tree(G, k)
-    # Initialize the values of f,fstar,fsquare, lambdastar
-    f = np.zeros([K,len(grid),2])
-    fstar = np.zeros([K,N,2]) #(-1,+1)
-    fsquare = np.zeros([K,N])
-    v = np.full([K, N], -1, dtype=int) # v[ell, i] will store the identity of the child that minimizes g_j(z_i) for parent ell
-    lambdastar = np.zeros(mu.shape[0])
-    # Loop over the nodes sorted by decreasing depth to compute the f values
-    for ell in reversed(list(T.nodes())): # could use reversed(list(nx.topological_sort(T))), could also use list(nx.dfs_postorder_nodes(T, source=k))
-        # If ell is the maximizer of mu, then eta = +infty
-        e = 10**10 if (ell == kstar) else eta[ell] 
-        # Compute the value of f
-        for i,z in enumerate(grid): # f[ell,i,0]=f_ell(grid[i]=z,-1), f[ell,i,1]=f_ell(grid[i]=z,1)
-            if ell in p: # ell can be a mode
-                f[ell,i,0] = e*divergence(mu[ell],z) 
-                f[ell,i,1] = e*divergence(mu[ell],z)
-                for j in T.successors(ell): 
-                    f[ell,i,1] += fsquare[j,i]
-                    f[ell,i,0] += fsquare[j,i]
-            else: # ell cannot be a mode, and needs to have a neighbour whose reward is higher or equal
-                f[ell,i,0] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in T.successors(ell)])
-                children = list(T.successors(ell)) 
-                if children:
-                    # Explicitly find the minimum g_cost and the winning child
-                    min_g_cost = float('inf')
-                    winning_child = -1
-                    for child in children:
-                        g_cost = min(fstar[child, i, 1], f[child, i, 0]) - fsquare[child, i]
-                        if g_cost < min_g_cost:
-                            min_g_cost = g_cost
-                            winning_child = child
-                    
-                    # Store the winner's identity
-                    v[ell, i] = winning_child
 
-                    # Compute f[ell,i,1] using the found minimum
-                    f[ell,i,1] = e*divergence(mu[ell],z) + sum([fsquare[j,i] for j in children]) + min_g_cost
+def regression_graph(G, mu, eta, p, k, N):
+    INF = 1e10
+    K = mu.shape[0]
+    kstar = int(np.argmax(mu))
+    grid = np.linspace(np.min(mu), np.max(mu), N)
+    T = nx.bfs_tree(G, k)
+
+    # Allocate arrays
+    f = np.zeros([K, N, 2])              # f[...,0] is u=-1 (<=), f[...,1] is u=+1 (>)
+    fstar = np.zeros([K, N, 2])         # fstar[...,0] = min_{j<=i} f[...,0], fstar[...,1] = min_{j>i} f[...,1]
+    fsquare = np.zeros([K, N])          # f^\diamond = min(fstar[...,0], fstar[...,1])
+    v = np.full([K, N], -1, dtype=int)  # which child attains min_{child} g_child(z)
+    lambdastar = np.zeros(K, dtype=float)
+
+    # Pointers for backtracking 
+    ptr_minus = np.full([K, N], -1, dtype=int)  # argmin index in [0..i] for f[...,0]
+    ptr_plus  = np.full([K, N], -1, dtype=int)  # argmin index in [i+1..N-1] for f[...,1], -1 if none
+
+    # Forward DP: compute f, then fstar/ptr arrays and fsquare
+    for ell in reversed(list(T.nodes())):
+        children = sorted(list(T.successors(ell)))  # deterministic order, just in case
+        # effective eta: make k^\star have infinite weight so its lambda must equal mu^\star
+        e = INF if (ell == kstar) else float(eta[ell])
+
+        # compute f[ell,i,u] for all grid points
+        for i, z in enumerate(grid):
+            div = e * divergence(mu[ell], z)
+            if ell in p:  # ell is allowed to be a mode
+                base = div
+                # sum over children of their fsquare at same z
+                s = 0.0
+                for j in children:
+                    s += fsquare[j, i]
+                f[ell, i, 0] = base + s
+                f[ell, i, 1] = base + s
+            else:
+                # ell cannot be a mode, and needs to have a neighbour whose reward is higher or equal
+                s = 0.0
+                for j in children:
+                    s += fsquare[j, i]
+                f[ell, i, 0] = div + s
+                # compute the extra min_v term for u=+1 if children exist
+                if children:
+                    # for each child compute g_child = min(fstar_child(+1), f_child(-1)) - fsquare_child
+                    min_g_cost = INF
+                    winner = -1
+                    for child in children:
+                        #  f[child, i, 0] is f_child(z,-1)
+                        cand_plus = fstar[child, i, 1]   # min_{w>z} f_child(w,+1)
+                        cand_minus = f[child, i, 0]      # f_child(z, -1)
+                        g_child = min(cand_plus, cand_minus) - fsquare[child, i]
+                        if g_child < min_g_cost:
+                            min_g_cost = g_child
+                            winner = child
+                    v[ell, i] = int(winner)  # store the winning child id
+                    f[ell, i, 1] = div + s + min_g_cost
                 else:
-                    f[ell,i,1] = 10**10
-        # Compute the value of fstar and fsquare
-        fstar[ell,0,0] = f[ell,0,0]
-        for i in range(1,N): fstar[ell,i,0] = min(fstar[ell,i-1,0],f[ell,i,0]) #min_{w \leq mu^\star} [...] = fstar[ell,N-1,0]=min_{i=0,...,N-1} f[ell,i,0]
-        fstar[ell,N-1,1] = 10**10
-        for i in range(1,N): fstar[ell,N-1-i,1] = min(fstar[ell,N-i,1],f[ell,N-i,1])
-        for i in range(N): fsquare[ell,i] = min(fstar[ell,i,0],fstar[ell,i,1])
-    lambdastar[k] = max(mu)
+                    f[ell, i, 1] = INF
+
+        # Compute fstar and pointers for ell:
+        # fstar[...,0] = min_{j<=i} f[...,0]  and ptr_minus is the argmin in [0..i]
+        fstar[ell, 0, 0] = f[ell, 0, 0]
+        ptr_minus[ell, 0] = 0
+        for i in range(1, N):
+            if f[ell, i, 0] <= fstar[ell, i-1, 0]:
+                fstar[ell, i, 0] = f[ell, i, 0]
+                ptr_minus[ell, i] = i
+            else:
+                fstar[ell, i, 0] = fstar[ell, i-1, 0]
+                ptr_minus[ell, i] = ptr_minus[ell, i-1]
+
+        # fstar[...,1] = min_{j>i} f[...,1] ; for i = N-1 it is INF and ptr_plus = -1
+        fstar[ell, N-1, 1] = INF
+        ptr_plus[ell, N-1] = -1
+        # iterate backwards to compute min over j > i
+        for i in range(N - 2, -1, -1):
+            # compare immediate next f at i+1 vs min at i+1
+            if f[ell, i+1, 1] <= fstar[ell, i+1, 1]:
+                fstar[ell, i, 1] = f[ell, i+1, 1]
+                ptr_plus[ell, i] = i + 1
+            else:
+                fstar[ell, i, 1] = fstar[ell, i+1, 1]
+                ptr_plus[ell, i] = ptr_plus[ell, i+1]
+
+        #  compute fsquare
+        for i in range(N):
+            fsquare[ell, i] = min(fstar[ell, i, 0], fstar[ell, i, 1])
+
+    # Backward pass using pointers
+    
+    lambdastar[k] = np.max(mu)
+    # iterate nodes in BFS order from root (k)
     for ell in list(T.nodes()):
         if ell == k:
             continue
-        # Find parent
-        parent = next(T.predecessors(ell))        
-        parent_grid_index = np.where(grid == lambdastar[parent])[0][0]
-        
-        # Check if the value of ell is constrained by the past
+
+        parent = next(T.predecessors(ell))
+        # robust nearest-grid index for parent's lambda (avoid float == just in case) 
+        parent_grid_index = int(np.argmin(np.abs(grid - lambdastar[parent])))
+
+        # Check if ell is constrained child
         grandparent_list = list(T.predecessors(parent))
         ell_is_constrained = False
-        if grandparent_list :
+        if grandparent_list:
             grandparent = grandparent_list[0]
             if lambdastar[parent] > lambdastar[grandparent] and parent not in p:
-                 constrained_child = v[parent, parent_grid_index]
-                
-                 if ell == constrained_child:
-                     ell_is_constrained = True
+                constrained_child = v[parent, parent_grid_index]
+                if constrained_child == ell:
+                    ell_is_constrained = True
+
+
+
         
-        # Apply appropriate formula if ell is constrained
+        # Decide value of lambda_ell using stored pointers
+        
         if ell_is_constrained:
-            # Ensure λ_ℓ is strictly greater than parent's λ
-            if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
-                lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+            if fstar[ell, parent_grid_index, 1] <= f[ell, parent_grid_index, 0]:
+                j = ptr_plus[ell, parent_grid_index]  # index j > parent_grid_index minimizing f[...,1]
+                if j == -1:
+                    # no strictly greater grid value -> fallback to equality with parent
+                    lambdastar[ell] = lambdastar[parent]
+                else:
+                    lambdastar[ell] = grid[j]
             else:
                 lambdastar[ell] = lambdastar[parent]
         else:
-            # No constraint on ell
+            # unconstrained case: compare fstar(+1) vs fstar(-1)
             if fstar[ell, parent_grid_index, 1] <= fstar[ell, parent_grid_index, 0]:
-                lambdastar[ell] = grid[parent_grid_index + 1 + np.argmin(f[ell, parent_grid_index+1:, 1])]
+                j = ptr_plus[ell, parent_grid_index]
+                if j == -1:
+                    lambdastar[ell] = lambdastar[parent]
+                else:
+                    lambdastar[ell] = grid[j]
             else:
-                lambdastar[ell] = grid[np.argmin(f[ell, :parent_grid_index+1, 0])]
-    # Debug information
-    if DEBUG:    
-        print(" ....... regression_graph ....... p =  ",p)
-        for ell in list(T.nodes()):
-            print("Node",ell)
-            print("Can Be Mode", ell in p)
-            print("f minus ",np.round(f[ell,:,0],3))
-            print("f plus",np.round(f[ell,:,1],3))
-            print("f star minus ",np.round(fstar[ell,:,0],3))
-            print("f star plus",np.round(fstar[ell,:,1],3))
-            print("f square",np.round(fsquare[ell,:],3))
-            print("v", np.round(v[ell,:],3))
-        print("Modes",p)
-        print("Grid:",np.round(grid,3))
-        print("Mu vector",np.round(mu,3))
-        print("Eta vector",np.round(eta,3))
-        print("Optimal Solution ",np.round(lambdastar,3))
-        print("Optimal Value",np.round(fsquare[k,N-1],3))
-        check_modes(G,lambdastar,p)
-    return(lambdastar)
+                j = ptr_minus[ell, parent_grid_index]
+                if j == -1:
+                    lambdastar[ell] = grid[0]
+                else:
+                    lambdastar[ell] = grid[j]
+
+    return lambdastar
     
 def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
     # Compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
@@ -287,12 +314,12 @@ def fast_minimization(g,b,c):
         vstar = np.min(  g[:,0,1] - g[:,0,0] )  + np.sum(g[:,0,0])
         cstar[np.argmin(  g[:,0,1] - g[:,0,0] ) ] = 1
     elif (b==1) and (c==1): 
-        #first case, b_v = c_v for some node v 
+        # first case, b_v = c_v for some node v 
         v11 = np.argmin(g[:,1,1] - g[:,0,0])
         D11 = g[v11,1,1] - g[v11,0,0]
         #second case, there exists two distinct nodes w_1,w_2 such that b_{w_1} = 1 = c_{w_2}, b_{w_2} = 0 = c_{w_1}
-        #in this case one must be careful if both A01 and A10 are minimized at the same entry, if so, we must chose the first best and second best 
-        #note: this case is only possible if there are at least two entries
+        # in this case one must be careful if both A01 and A10 are minimized at the same entry, if so, we must chose the first best and second best 
+        # note: this case is only possible if there are at least two entries
         if (g.shape[0] > 1):
             A10 = g[:,1,0] - g[:,0,0]
             v10 = A10.argsort()
@@ -303,7 +330,7 @@ def fast_minimization(g,b,c):
             else:
                 D1001 = A10[v10[0]] + A01[v01[0]]
             vstar = min(D11,D1001)+ np.sum(g[:,0,0])
-            if D11 < D1001: #or D11 <= D1001? not the main issue but to keep in mind
+            if D11 < D1001: 
                 bstar[v11] = 1
                 cstar[v11] = 1
             else:
@@ -378,7 +405,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
     best_bs_a1 = np.zeros([K, len(grid), 2, 2, max_deg], dtype=int)
     best_cs_a1 = np.zeros([K, len(grid), 2, 2, max_deg], dtype=int)
     best_w_idx_a1 = np.full([K, len(grid), 2, 2], -1, dtype=int)
-    champion_w_idx_a1 = np.full([K, len(grid), 2, 2], -1, dtype=int)
+    candidate_w_idx_a1 = np.full([K, len(grid), 2, 2], -1, dtype=int)
 
     # Forward pass over the nodes, sorted by decreasing depth
     for ell in reversed(list(T.nodes())):
@@ -399,7 +426,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                                 
         else:  # Internal node
             # For each grid point i and each of the 4 child-flag configurations,
-            # find the candidate child  that offers the minimum penalty.
+            # find the candidate child  that offers the minimum penalty
             if num_children > 0:
                 for i in range(N):
                     for b_child in range(2):
@@ -412,7 +439,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
                 # Construct the candidate set W_ell(z)
                 candidate_indices = {
                     candidate_w_idx_a1[ell, i, b_c[0], b_c[1]]
-                    for b_c in [(0,0), (0,1), (1,0), (1,1)] if champion_w_idx_a1[ell, i, b_c[0], b_c[1]] != -1
+                    for b_c in [(0,0), (0,1), (1,0), (1,1)] if candidate_w_idx_a1[ell, i, b_c[0], b_c[1]] != -1
                 }
                 # Compute h[ell,i,a,b,c] for each a,b,c
                 for a in range(3):
@@ -596,6 +623,7 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 
 
 #__________________Projected subgradient descent__________________
+
 def subgradient_descent(G,mu,N,I,nb_modes):
     # Uses values of penalization and step size suggested by the analysis
     kstar = np.argmax(mu)
@@ -626,71 +654,30 @@ def subgradient_descent(G,mu,N,I,nb_modes):
     eta_final=eta_mean/sum(eta_mean*divergence(mu,lambdastar))
     return(eta_final,sum(eta_final*Delta))
 
-def subgradient_descent_timed(G,mu,N,I,nb_modes):
-    start_time = time.time()
-    kstar = np.argmax(mu)
-    Delta = mu[kstar] - mu    
-    K=mu.shape[0]
-    eta = np.zeros(K)
-    gamma=0
-    non_zero_gaps = Delta[np.nonzero(Delta)]
-    if non_zero_gaps.size == 0:
-        return (np.ones(K) / K, 0.0)
-    for k in range(K):
-        if (Delta[k] > 0):
-            eta[k] = 1/divergence(mu[k],mu[kstar])
-            if 2*Delta[k]*eta[k] > gamma:
-                gamma=2*Delta[k]*eta[k]               
-    B=eta.dot(Delta)/np.min(Delta[np.nonzero(Delta)])
-    C=np.linalg.norm(Delta)+gamma*K**(3/2)*(mu[kstar]-np.min(mu))**2
-    eta_mean = eta/I
-    delta=np.sqrt(K*B**2/(I*C**2))
-    
-    print(f"Initial setup time: {time.time() - start_time:.4f} seconds")
-    
-    total_regression_time = 0
-    total_update_time = 0
-    
-    for i in range(I-1):
-        regression_start = time.time()
-        (lambdastar,vstar) = regression_all(G,mu,eta,N,nb_modes)
-        total_regression_time += time.time() - regression_start
-        
-        update_start = time.time()
-        subgradient = Delta - gamma*divergence(mu,lambdastar)*(sum(eta*divergence(mu,lambdastar)) < 1)
-        eta = eta - delta*subgradient
-        eta[eta < 0] = 0
-        eta_mean += eta/I
-        total_update_time += time.time() - update_start
-        
-        if i % 100 == 0:
-            print(f"Iteration {i}, current objective: {sum(eta*Delta):.4f}")
-    
-    eta_mean[kstar] = 0
-    final_regression_start = time.time()
-    (lambdastar,vstar) = regression_all(G,mu,eta_mean,N,nb_modes)
-    total_regression_time += time.time() - final_regression_start
-    eta_final=eta_mean/sum(eta_mean*divergence(mu,lambdastar))
-    end_time = time.time()
-    runtime = end_time - start_time
-    
-    print(f"Total runtime: {runtime:.4f} seconds")
-    print(f"Total regression time: {total_regression_time:.4f} seconds")
-    print(f"Total update time: {total_update_time:.4f} seconds")
-    
-    return(eta_final,sum(eta_final*Delta),runtime)
-
-def slsqp(G,mu,N,nb_modes): # Minimizing function from python, can be used instead of subgradient descent
-    n=len(mu)
+def slsqp(G,mu,N,nb_modes,local=False,eta0_guess=None): # Minimizing function from python, can be used instead of subgradient descent.
+    # If local=True, computes optimal rates under a local search constraint
     kstar = np.argmax(mu)
     Delta = mu[kstar] - mu
-    K=mu.shape[0]
-    eta0 = np.zeros(K)
-    neighborhood=modes_neighborhood(G,mu)
-    for k in range(K):
-        if (Delta[k] > 0):
-            eta0[k] = 1/divergence(mu[k],mu[kstar])
-    bounds=Bounds([0]*n,[np.inf]*n)
+    K = mu.shape[0]
+    if eta0_guess is not None:
+       eta0 = eta0_guess
+    else:
+       eta0 = np.zeros(K)
+       neighborhood = modes_neighborhood(G,mu)
+       for k in range(K):
+           if (Delta[k] > 0):
+               eta0[k] = 1/divergence(mu[k],mu[kstar]) # Lai-Robbins rates as initial guess
+    if local: # Compute optimal solution of P_GL under added constraint eta_k=0 if k is not in the modes neighborhood
+        lb = [0] * K
+        ub = [np.inf] * K
+        neighborhood = modes_neighborhood(G,mu)
+        for k in range(K):
+           if k not in neighborhood:
+               ub[k] = 0.0
+        bounds=Bounds(lb,ub)
+    else:
+        bounds=Bounds([0]*K,[np.inf]*K)
+
     cons = ({'type': 'ineq', 'fun': lambda eta:regression_all(G,mu,eta,N,nb_modes)[1] -1,
              'jac' : lambda eta:divergence(mu,regression_all(G,mu,eta,N,nb_modes)[0])})
     objective = lambda eta: eta @ Delta
@@ -701,7 +688,7 @@ def slsqp(G,mu,N,nb_modes): # Minimizing function from python, can be used inste
 #__________________OSSB implementation__________________
 
 class MultimodalOSSB:
-    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal"):
+    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
         """
         Args:
             G: NetworkX graph structure
@@ -729,6 +716,10 @@ class MultimodalOSSB:
         # Track empirical means and pull counts
         self.mu_hat = np.zeros(K)
         self.N_pulls = np.zeros(K, dtype=int)
+        self.eta_hat = None
+        self.use_doubling_schedule = use_doubling_schedule
+        if self.use_doubling_schedule:
+            self.next_update_t = 1 # tracks at each round if we should update the P_GL solution
         
     def classical_eta(self):
         # Classical Graves-Lai exploration rates (1 / divergence)
@@ -741,7 +732,7 @@ class MultimodalOSSB:
         return eta
     
     def local_eta(self):
-        # local search rates (1 / divergence in the neighborhood of modes)
+        # local search rates (1 / divergence in the neighborhood of modes), not a feasible rate for P_GL
         kstar = np.argmax(self.mu_hat)
         Delta = self.mu_hat[kstar] - self.mu_hat
         eta = np.zeros(self.K)
@@ -765,12 +756,32 @@ class MultimodalOSSB:
                 I=self.I,
                 nb_modes=self.m
             )
-        elif self.strategy == "multimodal slsqp":
-            eta = slsqp( 
-                G=self.G,
-                mu=self.mu_hat,
-                N=self.N,
-                nb_modes=self.m).x
+            
+        elif self.strategy in ["multimodal slsqp", "local slsqp"]: # local slsqp attempts to solve P_GL with the added constraint eta_k=0 when k is not in the modes neighborhood
+            should_update_eta = False
+            if not self.use_doubling_schedule:
+                should_update_eta = True
+            elif (t + 1) == self.next_update_t:
+                should_update_eta = True
+
+            if should_update_eta:
+                
+                is_local_run = (self.strategy == "local slsqp")
+                
+                solution = slsqp(
+                    G=self.G,
+                    mu=self.mu_hat,
+                    N=self.N,
+                    nb_modes=self.m,
+                    local=is_local_run, 
+                    eta0_guess=None # Can also do a warm start: replace None by self.eta_hat
+                )
+                self.eta_hat = solution.x
+                
+                if self.use_doubling_schedule:
+                    self.next_update_t *= 2
+            
+            eta = self.eta_hat
         else:
             raise ValueError(f"Unknown strategy: {self.strategy}")
             
@@ -781,7 +792,6 @@ class MultimodalOSSB:
         
         return (np.argmax(self.mu_hat) if exploration_done 
                 else np.argmin(self.N_pulls/(eta + 1e-10)))
-
 
     def update(self, arm, reward):
         # Update statistics after arm pull
@@ -1015,7 +1025,7 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
     for name, graph_func in graph_types.items():
         for K in node_counts:
             print(f"Running Experiment 1: {name}, K={K}")
-            # Parallelize the trials for this specific (name, K) configuration
+            # Parallelize the trials for this specific (name, K)
             trial_results = Parallel(n_jobs=-1, verbose=5)(
                 delayed(runtime_DP_single_trial)(
                     seed_base + i, N, num_modes, name, graph_func, K
@@ -1067,7 +1077,7 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
         for i in range(len(algs))
     ]
 
-    # Determine which experiments to plot (Exp 1 and 2)
+    # Plot results (Exp 1 and 2)
     exp_names_to_plot = ['Random Tree', f'Balanced Tree (h={height})']
     df_plot = df[df['Experiment'].isin(exp_names_to_plot)].copy()
 
@@ -1104,73 +1114,65 @@ if RUNTIME_IMPROVED_DP_EXPERIMENT:
 
 # Regret Experiment (multimodal OSSB vs local/classical OSSB)
 
-def run_trials(true_means, graph, m, K, T, strategy, num_trials):
-    all_regrets = []
-    t_init = time.time()
-    for trial in tqdm(range(num_trials)):
-        # Initialize bandit
-        bandit = MultimodalOSSB(
-            G=graph,
-            K=K,
-            T=T,
-            true_means=true_means,
-            m=m,
-            strategy=strategy
-        )
+def run_single_trial(trial_seed, true_means, graph, m, K, T, use_doubling_schedule=False):
+    np.random.seed(trial_seed)
+
+    def run_one_strategy(strategy):
+        # Seed the random number generator for this specific run
+        schedule_for_this_run = use_doubling_schedule if (strategy == "multimodal slsqp" or strategy == "local slsqp")  else False
         
-        # Run bandit algorithm
+        bandit = MultimodalOSSB(
+            G=graph, K=K, T=T, true_means=true_means, m=m, strategy=strategy, use_doubling_schedule=schedule_for_this_run
+        )
         for t in range(T):
             arm = bandit.select_arm(t)
-            reward = np.random.normal(bandit.true_means[arm], 1.0)
+            reward = np.random.normal(bandit.true_means[arm], 1)
             bandit.update(arm, reward)
-            
-        # Store regret history
-        all_regrets.append(bandit.regret_history)
-            
-    return np.array(all_regrets)
+        return bandit.regret_history
 
-def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trials):
-    # Plot regret curves with empirical confidence intervals
-    plt.figure(figsize=(10, 6))
-    # 97.5% quantile of standard Gaussian 
-    quantile = stats.norm.ppf(0.975, loc=0, scale=1)
+    # Run each strategy
+    regret_mmslsqp = run_one_strategy("multimodal slsqp")
+    regret_localslsqp = run_one_strategy("local")
+    regret_classical = run_one_strategy("classical")
+
     
-    # # Multimodal (with projected subgradient descent) curve
-    # mm_mean = np.mean(mm_regrets, axis=0)
-    # mm_std = np.std(mm_regrets, axis=0)
-    # plt.plot(mm_mean, label="Multimodal OSSB")
-    # plt.fill_between(
-    #     range(T), mm_mean - mm_std, mm_mean + mm_std,
-    #     alpha=0.2
-    # )
+    return regret_mmslsqp, regret_localslsqp, regret_classical
+
+
+def run_all_trials_parallel(true_means, graph, m, K, T, num_trials, seed_base, use_doubling_schedule=False): # Run in parallel for speedup
+
+    # n_jobs = -1 ensures all threads are used when parallelizing. To not parallelize, set n_jobs = 1
+    results = Parallel(n_jobs=-1, verbose=10)(
+        delayed(run_single_trial)(
+            seed_base + trial, # Pass a unique seed for each trial
+            true_means, graph, m, K, T, use_doubling_schedule=use_doubling_schedule) 
+        for trial in range(num_trials)) 
+
+    mmslsqp_regrets = np.array([res[0] for res in results])
+    localslsqp_regrets = np.array([res[1] for res in results])
+    classical_regrets = np.array([res[2] for res in results])
+    
+    return mmslsqp_regrets, localslsqp_regrets, classical_regrets
+
+def plot_results(mmslsqp_regrets, localslsqp_regrets, classical_regrets, T, num_trials):
+    plt.figure(figsize=(10, 6))
     
     # Multimodal slsqp curve
     mmslsqp_mean = np.mean(mmslsqp_regrets, axis=0)
-    mmslsqp_std = quantile/np.sqrt(num_trials)*np.std(mmslsqp_regrets, axis=0)
+    mmslsqp_std = (1/np.sqrt(num_trials))*np.std(mmslsqp_regrets, axis=0)
     plt.plot(mmslsqp_mean, label="Multimodal OSSB", marker='o', markevery=T//10)
     plt.fill_between(
         range(T), mmslsqp_mean - mmslsqp_std, mmslsqp_mean + mmslsqp_std,
-        alpha=0.2
-    )
-    # Local curve
-    local_mean = np.mean(local_regrets, axis=0)
-    local_std = quantile/np.sqrt(num_trials)*np.std(local_regrets, axis=0)
-    plt.plot(local_mean, label="Local search OSSB" ,marker='^', markevery=T//10)
-    plt.fill_between(
-        range(T), local_mean - local_std, local_mean + local_std,
-        alpha=0.2
-    )
-    
+        alpha=0.2)
     
     # Classical curve
     classical_mean = np.mean(classical_regrets, axis=0)
-    classical_std = quantile/np.sqrt(num_trials)*np.std(classical_regrets, axis=0)
+    classical_std = (1/np.sqrt(num_trials))*np.std(classical_regrets, axis=0)
     plt.plot(classical_mean, label="Classical OSSB", marker='s', markevery=T//10)
     plt.fill_between(
         range(T), classical_mean - classical_std,
         classical_mean + classical_std, alpha=0.2
     )
-    
     plt.xlabel("Time Step",fontsize=20)
     plt.ylabel("Cumulative Regret",fontsize=20)
     plt.legend(fontsize="15", loc="upper left")
@@ -1178,28 +1180,29 @@ def plot_results(mmslsqp_regrets, local_regrets, classical_regrets, T, num_trial
     plt.show()
     
     
-if REGRET_EXPERIMENT:
-    num_trials = 50
-    K = 7
-    # Create a line graph with K nodes
-    G = nx.path_graph(K)
-    T = 500
-    m = 2  # Allow 2 modes
-    true_means = generate_multimodal_function(G,[0,6],6,1)
-    # mm_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
-    #                         strategy="multimodal", num_trials=num_trials)
-    mmslsqp_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
-                            strategy="multimodal slsqp", num_trials=num_trials)
-    local_regrets = run_trials(true_means, G, m=m, K=K, T=T, 
-                            strategy="local", num_trials=num_trials)
-    classical_regrets = run_trials(true_means, G, m=m, K=K, T=T,
-                                  strategy="classical", num_trials=num_trials)
-    
-    # If an error occured while running the experiment, run_trials still outputs regret history until that error
-    actual_trials = min(len(mmslsqp_regrets), len(local_regrets), len(classical_regrets))
-    print(f"Plotting results using {actual_trials} completed trials")
 
-    # Plot results using the actual number of completed trials
-    plot_results(mmslsqp_regrets[:actual_trials], 
-            local_regrets[:actual_trials], 
-            classical_regrets[:actual_trials], T, actual_trials)
+
+if REGRET_EXPERIMENT: 
+    DOUBLING_SCHEDULE = True # Set to True to solve P_GL every 2^k iterations, and to False to solve P_GL at every step. 
+    num_trials = 500
+    random_seed = 0
+    G = nx.balanced_tree(2,2)
+    K = len(G)
+    T = 10000
+    m = 2
+    for sigma in [0.5,4]:
+        true_means = generate_multimodal_function(G,[4,6],6,sigma)
+    
+        # Run trials in parallel
+        mmslsqp_regrets, localslsqp_regrets, classical_regrets = run_all_trials_parallel(
+            true_means, G, m=m, K=K, T=T, num_trials=num_trials, seed_base=random_seed,use_doubling_schedule=DOUBLING_SCHEDULE
+        )
+        
+        # If an error occured while running the experiment, run_trials still outputs regret history until that error. May not apply if njobs != 1
+        actual_trials = min(len(mmslsqp_regrets), len(localslsqp_regrets), len(classical_regrets))
+        print(f"Plotting results using {actual_trials} completed trials")
+
+        # Plot results using the actual number of completed trials
+        plot_results(mmslsqp_regrets[:actual_trials], 
+                localslsqp_regrets[:actual_trials], 
+                classical_regrets[:actual_trials], T, actual_trials)
