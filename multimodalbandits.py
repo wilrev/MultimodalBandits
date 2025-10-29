@@ -966,19 +966,20 @@ class MultimodalOSSB:
 
 # Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
-def runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials):
-     """ Performs the runtime experiment on a line graph from Appendix A.2 with num_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
+def runtime_experiment(nb_arms_list, nb_modes_list, N_list, nb_trials):
+     """ Performs the runtime experiment on a line graph from Appendix A.2 with nb_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
         Args:
-            nb_arms_list (list): The number of arms
-            nb_modes_list (list): The number of allowed modes
-            N_list (list): The time horizon
-            num_trials (int): The number of trials
+            nb_arms_list (list): The number of arms to test
+            nb_modes_list (list): The number of allowed modes to test
+            N_list (list): The number of grid points used for discretization to test
+            nb_trials (int): The number of trials
       
         Returns: 
             results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each list contains the runtime (in seconds) for each trial for the given parameters
             plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
                 - 'x' (list[int]): number of arms values used for plotting
                 - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+            Saves the figure as 'runtime_analysis.png', shows the plot, and prints log-log regression slopes and R^2 values for each curve.
         """
     results = {}
     plot_data = {}
@@ -1009,7 +1010,7 @@ def runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials):
                     key = (nb_arms, nb_modes, N)
                     results[key] = []
                     
-                    for trial in range(num_trials):
+                    for trial in range(nb_trials):
                         print(f"\nTrial {trial+1} for Arms: {nb_arms}, Modes: {nb_modes}, N: {N}")
                         G = generate_line_graph(nb_arms)
                         modes = generate_spread_out_modes(nb_arms, nb_modes)
@@ -1066,15 +1067,31 @@ def runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials):
     return results, plot_data
 
 if RUNTIME_EXPERIMENT:
-    num_trials = 5
+    nb_trials = 5
     nb_arms_list = [20,25,30,35,40,45,50,55,60,65,70]
     nb_modes_list = [2, 3, 4, 5]
     N_list = [100]
-    results, plot_data = runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials)
+    results, plot_data = runtime_experiment(nb_arms_list, nb_modes_list, N_list, nb_trials)
 
 # The following functions can be used to plot the runtime with respect to the number of modes or the number of discretization points
 
 def analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list, N_list):
+     """ Reorganize the data and plot average runtime w.r.t. number of modes.
+
+        Args:
+            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
+                list contains the runtime (in seconds) for each trial for the given parameters
+            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+                - 'x' (list[int]): number of arms values used for plotting
+                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+            nb_arms_list (list): The number of arms to test
+            nb_modes_list (list): The number of allowed modes to test
+            N_list (list): The number of grid points used for discretization to test
+
+        Returns:
+            None: Saves the figure as 'complexity_nb_modes.png', shows the plot, and
+            prints log-log regression slopes and R^2 values for each curve
+    """
     # Reorganize the data to plot the runtime w.r.t. number of modes
     fig, axs = plt.subplots(len(N_list), 1, figsize=(10, 5*len(N_list)))
     if len(N_list) == 1:
@@ -1109,7 +1126,22 @@ def analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list,
     plt.show()
 
 def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list):
-    # Reorganize the data to plot the runtime w.r.t. number of discretization points
+     """ Reorganize the data and plot average runtime w.r.t. number of discretization points
+
+        Args:
+            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
+                list contains the runtime (in seconds) for each trial for the given parameters
+            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+                - 'x' (list[int]): number of arms values used for plotting
+                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+            nb_arms_list (list): The number of arms to test
+            nb_modes_list (list): The number of allowed modes to test
+            N_list (list): The number of grid points used for discretization to test
+
+        Returns:
+            None: Saves the figure as 'complexity_N.png', shows the plot, and
+            prints log-log regression slopes and R^2 values for each curve
+    """
     fig, axs = plt.subplots(len(nb_modes_list), 1, figsize=(10, 5*len(nb_modes_list)))
     if len(nb_modes_list) == 1:
         axs = [axs]
@@ -1145,7 +1177,7 @@ def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list
 # analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list, N_list)
 # analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list)
 
-# # # Access plot data for a specific N and number of modes
+# # Access plot data for a specific N and number of modes
 # N = 100
 # nb_modes = 2
 # x_values = plot_data[(nb_modes, N)]['x']
@@ -1159,7 +1191,18 @@ def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list
 
 # Runtime experiment (Original DP vs Improved DP)
 
-def runtime_DP_single_trial(trial_seed, N, nb_modes, name, graph_func, K):
+def runtime_DP_single_trial(trial_seed, N, nb_modes, graph_func, K):
+    """ Performs a single trial of the runtime experiment of Appendix E.8 comparing both DP implementations
+        Args:
+            trial_seed (int): The random seed, can be fixed for reproducibility
+            N (int): The number of grid points used for discretization
+            nb_modes (int): The number of allowed modes
+            graph_func (callable): A function that takes a number of nodes K as input and returns a networkx graph with K nodes.
+            K (int): The number of nodes in the graph.
+  
+    Returns: 
+        (slow_time,fast_time) (float,float) : The runtime in seconds for the original DP and the improved DP, respectively.
+        """
 
     np.random.seed(trial_seed) 
     G = graph_func(K)
@@ -1181,7 +1224,23 @@ def runtime_DP_single_trial(trial_seed, N, nb_modes, name, graph_func, K):
     
     return slow_time, fast_time
 
-def runtime_DP(num_trials=50, N=100, nb_modes=3, seed_base=0):
+def runtime_DP(nb_trials=50, N=100, nb_modes=3, seed_base=0):
+    """ Conducts and plots the runtime comparison between the original and improved DP implementations
+
+    This function runs two main experiments:
+    1. Varying the number of nodes (K) for random trees.
+    2. Varying the branching factor for balanced trees of a fixed height.
+    It parallelizes the trials for efficiency and generates plots to visualize the results.
+
+    Kwargs:
+        nb_trials (int): The number of trials to average over for each configuration.
+        N (int): The number of grid points used for discretization in the DP algorithms.
+        nb_modes (int): The number of modes used for generating the multimodal function.
+        seed_base (int): The base random seed for reproducibility.
+
+    Returns:
+       df (pandas dataframe): Contains the runtime results for each trial, algorithm, and experimental setup.
+"""
     results = []
 
     print(f"\n--- Experiment 1: Varying K for random trees (modes={nb_modes}) ---")
@@ -1195,8 +1254,8 @@ def runtime_DP(num_trials=50, N=100, nb_modes=3, seed_base=0):
             # Parallelize the trials for this specific (name, K)
             trial_results = Parallel(n_jobs=-1, verbose=5)(
                 delayed(runtime_DP_single_trial)(
-                    seed_base + i, N, nb_modes, name, graph_func, K
-                ) for i in range(num_trials)
+                    seed_base + i, N, nb_modes, graph_func, K
+                ) for i in range(nb_trials)
             )
             # Collect results
             for slow_time, fast_time in trial_results:
@@ -1220,7 +1279,7 @@ def runtime_DP(num_trials=50, N=100, nb_modes=3, seed_base=0):
                 seed_base + i, N, nb_modes, 
                 f'Balanced Tree (h={height})', 
                 lambda k: nx.balanced_tree(bf, height), K 
-            ) for i in range(num_trials)
+            ) for i in range(nb_trials)
         )
         # Collect results
         for slow_time, fast_time in trial_results:
@@ -1282,6 +1341,23 @@ if RUNTIME_IMPROVED_DP_EXPERIMENT:
 # Regret Experiment (multimodal OSSB vs local/classical OSSB)
 
 def run_single_trial(trial_seed, true_means, graph, m, K, T, use_doubling_schedule=False):
+    """ Runs a single trial of the regret experiment for multimodal OSSB and classical OSSB
+
+    Args:
+        trial_seed (int): The random seed for this trial to ensure reproducibility
+        true_means (numpy array): The true mean reward for each arm
+        graph (networkx graph): The graph structure over the arms
+        m (int): The number of allowed modes
+        K (int): The number of arms
+        T (int): The time horizon for the trial
+
+    Kwargs:
+        use_doubling_schedule (bool): If True, enables the doubling schedule for multimodal OSSB
+
+    Returns:
+        (regret_mmslsqp, regret_local, regret_classical) (list,list): Contains the cumulative regret history (a list of floats) for
+        the 'multimodal slsqp', 'local', and 'classical' strategies, respectively
+"""
     np.random.seed(trial_seed)
 
     def run_one_strategy(strategy):
@@ -1299,34 +1375,62 @@ def run_single_trial(trial_seed, true_means, graph, m, K, T, use_doubling_schedu
 
     # Run each strategy
     regret_mmslsqp = run_one_strategy("multimodal slsqp")
-    regret_localslsqp = run_one_strategy("local")
+    regret_local= run_one_strategy("local")
     regret_classical = run_one_strategy("classical")
 
     
-    return regret_mmslsqp, regret_localslsqp, regret_classical
+    return regret_mmslsqp, regret_local, regret_classical
 
 
-def run_all_trials_parallel(true_means, graph, m, K, T, num_trials, seed_base, use_doubling_schedule=False): # Run in parallel for speedup
+def run_all_trials_parallel(true_means, graph, m, K, T, nb_trials, seed_base, use_doubling_schedule=False): # Run in parallel for speedup
+    """ Runs multiple trials of the regret experiment (run_single_trial) in parallel for efficiency
 
+    Args:
+        true_means (numpy array): The true mean reward for each arm
+        graph (networkx graph): The graph structure over the arms
+        m (int): The number of allowed modes
+        K (int): The number of arms
+        T (int): The time horizon for each trial
+        nb_trials (int): The total number of trials
+        seed_base (int): The base random seed, which is increased by one for each trial
+
+    Kwargs:
+        use_doubling_schedule (bool): If True, enables the doubling schedule for multimodal OSSB
+
+    Returns:
+        mmslsqp_regrets, local_regrets, classical_regrets (numpy array, numpy array, numpy array): Each array has shape
+        (nb_trials, T) and contains the regret histories for all trials for the 'multimodal slsqp', 'local' and 'classical' strategies, respectively.
+"""
     # n_jobs = -1 ensures all threads are used when parallelizing. To not parallelize, set n_jobs = 1
     results = Parallel(n_jobs=-1, verbose=10)(
         delayed(run_single_trial)(
             seed_base + trial, # Pass a unique seed for each trial
             true_means, graph, m, K, T, use_doubling_schedule=use_doubling_schedule) 
-        for trial in range(num_trials)) 
+        for trial in range(nb_trials)) 
 
     mmslsqp_regrets = np.array([res[0] for res in results])
-    localslsqp_regrets = np.array([res[1] for res in results])
+    local_regrets =  np.array([res[1] for res in results])
     classical_regrets = np.array([res[2] for res in results])
     
-    return mmslsqp_regrets, localslsqp_regrets, classical_regrets
+    return mmslsqp_regrets, local_regrets, classical_regrets
 
-def plot_results(mmslsqp_regrets, localslsqp_regrets, classical_regrets, T, num_trials):
+def plot_results(mmslsqp_regrets, classical_regrets, T, nb_trials):
+    """ Plots the average cumulative regret with standard error bands for 'multimodal slsqp' and 'classical' strategies. 'local' is ommited because it is not a feasible strategy.
+
+    Args:
+        mmslsqp_regrets (numpy array): A 2D array of regret histories for the Multimodal OSSB strategy
+        classical_regrets (numpy array): A 2D array of regret histories for the Classical OSSB strategy
+        T (int): The time horizon of the experiment
+        nb_trials (int): The number of trials over which the results are averaged
+
+    Returns:
+        None: The function generates and displays a matplotlib plot
+"""
     plt.figure(figsize=(10, 6))
     
     # Multimodal slsqp curve
     mmslsqp_mean = np.mean(mmslsqp_regrets, axis=0)
-    mmslsqp_std = (1/np.sqrt(num_trials))*np.std(mmslsqp_regrets, axis=0)
+    mmslsqp_std = (1/np.sqrt(nb_trials))*np.std(mmslsqp_regrets, axis=0)
     plt.plot(mmslsqp_mean, label="Multimodal OSSB", marker='o', markevery=T//10)
     plt.fill_between(
         range(T), mmslsqp_mean - mmslsqp_std, mmslsqp_mean + mmslsqp_std,
@@ -1334,7 +1438,7 @@ def plot_results(mmslsqp_regrets, localslsqp_regrets, classical_regrets, T, num_
     
     # Classical curve
     classical_mean = np.mean(classical_regrets, axis=0)
-    classical_std = (1/np.sqrt(num_trials))*np.std(classical_regrets, axis=0)
+    classical_std = (1/np.sqrt(nb_trials))*np.std(classical_regrets, axis=0)
     plt.plot(classical_mean, label="Classical OSSB", marker='s', markevery=T//10)
     plt.fill_between(
         range(T), classical_mean - classical_std,
@@ -1349,7 +1453,7 @@ def plot_results(mmslsqp_regrets, localslsqp_regrets, classical_regrets, T, num_
 
 if REGRET_EXPERIMENT: 
     DOUBLING_SCHEDULE = True # Set to True to solve P_GL every 2^k iterations, and to False to solve P_GL at every step. 
-    num_trials = 500
+    nb_trials = 500
     random_seed = 0
     G = nx.balanced_tree(2,2)
     K = len(G)
@@ -1358,18 +1462,17 @@ if REGRET_EXPERIMENT:
     for sigma in [0.5,4]:
         true_means = generate_multimodal_function(G,[4,6],6,sigma)
     
-        # Run trials in parallel
-        mmslsqp_regrets, localslsqp_regrets, classical_regrets = run_all_trials_parallel(
-            true_means, G, m=m, K=K, T=T, num_trials=num_trials, seed_base=random_seed,use_doubling_schedule=DOUBLING_SCHEDULE
+       # Run trials in parallel
+        mmslsqp_regrets, _ , classical_regrets = run_all_trials_parallel(
+            true_means, G, m=m, K=K, T=T, nb_trials=nb_trials, seed_base=random_seed,use_doubling_schedule=DOUBLING_SCHEDULE
         )
         
         # If an error occured while running the experiment, run_trials still outputs regret history until that error. May not apply if njobs != 1
-        actual_trials = min(len(mmslsqp_regrets), len(localslsqp_regrets), len(classical_regrets))
+        actual_trials = min(len(mmslsqp_regrets), len(classical_regrets))
         print(f"Plotting results using {actual_trials} completed trials")
 
         # Plot results using the actual number of completed trials
-        plot_results(mmslsqp_regrets[:actual_trials], 
-                localslsqp_regrets[:actual_trials], 
-                classical_regrets[:actual_trials], T, actual_trials)
+        plot_results(mmslsqp_regrets[:actual_trials], classical_regrets[:actual_trials], T, actual_trials)
+
 
 
