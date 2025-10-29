@@ -1399,7 +1399,7 @@ def run_all_trials_parallel(true_means, graph, m, K, T, nb_trials, seed_base, us
 
     Returns:
         mmslsqp_regrets, local_regrets, classical_regrets (numpy array, numpy array, numpy array): Each array has shape
-        (nb_trials, T) and contains the regret histories for all trials for the 'multimodal slsqp', 'local' and 'classical' strategies, respectively.
+        (nb_trials, T) and contains the regret histories for all trials for the 'multimodal slsqp', 'local' and 'classical' strategies, respectively
 """
     # n_jobs = -1 ensures all threads are used when parallelizing. To not parallelize, set n_jobs = 1
     results = Parallel(n_jobs=-1, verbose=10)(
@@ -1415,7 +1415,7 @@ def run_all_trials_parallel(true_means, graph, m, K, T, nb_trials, seed_base, us
     return mmslsqp_regrets, local_regrets, classical_regrets
 
 def plot_results(mmslsqp_regrets, classical_regrets, T, nb_trials):
-    """ Plots the average cumulative regret with standard error bands for 'multimodal slsqp' and 'classical' strategies. 'local' is ommited because it is not a feasible strategy.
+    """ Plots the average cumulative regret with standard error bands for 'multimodal slsqp' and 'classical' strategies. 'local' is ommited because it is not a feasible strategy
 
     Args:
         mmslsqp_regrets (numpy array): A 2D array of regret histories for the Multimodal OSSB strategy
@@ -1473,6 +1473,7 @@ if REGRET_EXPERIMENT:
 
         # Plot results using the actual number of completed trials
         plot_results(mmslsqp_regrets[:actual_trials], classical_regrets[:actual_trials], T, actual_trials)
+
 
 
 
