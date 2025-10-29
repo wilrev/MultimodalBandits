@@ -77,7 +77,7 @@ def generate_multimodal_function(G,m,mmax,sigma):
     Args:
         G (networkx graph): The graph G
         m (list): The set of modes 
-        mmax (float): The value of the mixture components at the modes
+        mmax (float): The index of the largest mode
         sigma (float): The standard deviation for each gaussian mixture component
 
     Returns:
@@ -91,28 +91,28 @@ def generate_multimodal_function(G,m,mmax,sigma):
             mu[i] = mu[i] + (1 + (j == mmax))*np.exp(-(1/(sigma))*d[i][j])
     return(mu)
 
-def generate_spread_out_modes(n_arms, n_modes):
-    """ TODO Maximizes the number of points outside of the neighborhood of the modes to have a more representative runtime
+def generate_spread_out_modes(nb_arms, nb_modes):
+    """ For a line graph with nodes {0,...,nb_arms-1} and nb_modes modes, computes a set of spread out modes that maximizes the number of points outside of their neighborhood. Helpful to get a more representative runtime in the runtime experiment
     Args:
-        n_arms (int): The number of arms
-        n_modes (TODO): The number of modes
+        nb_arms (int): The number of arms
+        nb_modes (TODO): The number of modes
 
     Returns:
         modes: The set of modes
 
     """
-    if n_modes * 3 - 1 > n_arms:
-        raise ValueError(f"Cannot generate {n_modes} spread out modes for {n_arms} arms.")
+    if nb_modes * 3 - 1 > nb_arms:
+        raise ValueError(f"Cannot generate {nb_modes} spread out modes for {nb_arms} arms.")
     
     modes = []
-    available_positions = list(range(n_arms))
+    available_positions = list(range(nb_arms))
     # Start with the extremes
     modes.append(0)
-    modes.append(n_arms - 1)
+    modes.append(nb_arms - 1)
     available_positions = available_positions[2:-2]  # Remove the extremes and their neighbors
     
     # Add remaining modes
-    for _ in range(n_modes - 2):
+    for _ in range(nb_modes - 2):
         if not available_positions:
             raise ValueError("Not enough positions to place modes.")
         
@@ -127,12 +127,12 @@ def generate_spread_out_modes(n_arms, n_modes):
         available_positions = [p for p in available_positions if abs(p - new_mode) > 1]
     
     return sorted(modes)
-def get_random_modes(G, num_modes, k_star):
-    """TODO: Docstring for get_random_modes.
+def get_random_modes(G, nb_modes, k_star):
+    """For a graph G, computes a set of nb_modes random modes that contain the optimal arm k_star
 
     Args:
         G (networkx graph): The graph G 
-        num_modes (int): The number of modes
+        nb_modes (int): The number of modes
         k_star (int): The optimal arm
 
     Returns:
@@ -143,7 +143,7 @@ def get_random_modes(G, num_modes, k_star):
     forbidden = {k_star} | set(G.neighbors(k_star))
     available_nodes = [n for n in G.nodes() if n not in forbidden]
     
-    while len(modes) < num_modes and available_nodes:
+    while len(modes) < nb_modes and available_nodes:
         new_mode = np.random.choice(available_nodes)
         modes.add(new_mode)
         forbidden.update({new_mode} | set(G.neighbors(new_mode)))
@@ -323,11 +323,13 @@ def regression_graph(G,mu,eta,p,k,N):
                     lambdastar[ell] = grid[j]
 
     return lambdastar
+    
 #def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
 #    # Compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
 #    v = sum( eta*divergence(mu,lambdastar))
 #    err = nx.eccentricity(G,k)*(1/N)*(max(mu)-min(mu))*sum(2*eta*np.abs(lambdastar-mu))
 #    return(v/(v-err))
+
 def regression_all(G,mu,eta,N,nb_modes):
     """Compute the minimizer of the weighted sum of divergences sum_k eta_k d(mu_k,lambda_k) over all multimodal functions lambda with a fixed number of modes, discretized over a grid
 
@@ -741,7 +743,7 @@ def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
         timed (boolean): Set to True to compute the runtime
 
     Returns:
-        (eta_final,sum(eta_final*Delta),runtime): (numpy array,float,float) The optimal solution, the corresponding regret and the runtime
+        (eta_final,value,runtime): (numpy array,float,float) The optimal solution, the corresponding value of P_GL and the runtime
 
     """
     if timed:
@@ -772,26 +774,27 @@ def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
     eta_mean[kstar] = 0
     (lambdastar,vstar) = regression_all(G,mu,eta_mean,N,nb_modes)
     eta_final=eta_mean/sum(eta_mean*divergence(mu,lambdastar))
+    value=sum(eta_final*Delta)
     
     if timed:
         end_time = time.time()
         runtime = end_time - start_time
-        return(eta_final,sum(eta_final*Delta),runtime)
+        return(eta_final,value,runtime)
     else:
-        return(eta_final,sum(eta_final*Delta))
+        return(eta_final,value)
 
-def slsqp(G,mu,N,nb_modes,local=False,eta0_guess=None): # Minimizing function from python, can be used instead of subgradient descent.
-    """Computes the optimal solution of the Graves-Lai optimization problem using the built-in minimization from Python. Alternative to subgradient_descent.
+def slsqp(G,mu,N,I,nb_modes,local=False,eta0_guess=None):
+    """Computes the optimal solution of the Graves-Lai optimization problem using the Python sequential least squares programming implementation (SLSQP). Alternative to subgradient_descent.
 
     Args:
         G (networkx graph): The graph G
         mu (numpy array): The values of function mu
         N (int): The number of grid points used for discretization
-        I (int): The number of iterations of subgradient descent
+        I (int): The number of iterations
         nb_modes (int): The number of modes of lambda 
 
     Kwargs:
-        local (boolean): Use local search if True 
+        local (boolean): Add a local search constraint if True 
         eta0_guess (numpy array): Initial guess for eta, if any 
 
     Returns:
@@ -825,7 +828,7 @@ def slsqp(G,mu,N,nb_modes,local=False,eta0_guess=None): # Minimizing function fr
     cons = ({'type': 'ineq', 'fun': lambda eta:regression_all(G,mu,eta,N,nb_modes)[1] -1,
              'jac' : lambda eta:divergence(mu,regression_all(G,mu,eta,N,nb_modes)[0])})
     objective = lambda eta: eta @ Delta
-    sol=minimize(objective, eta0, jac=lambda eta:Delta, constraints=cons, options={'maxiter':100}, bounds=bounds)
+    sol=minimize(objective, eta0, jac=lambda eta:Delta, constraints=cons, options={'maxiter':I}, bounds=bounds)
     return(sol)
 
 
@@ -835,13 +838,17 @@ class MultimodalOSSB:
     def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
         """
         Args:
-            G: NetworkX graph structure
-            K: Number of arms
-            T: Time horizon
-            m: Number of modes allowed
-            N: Number of discretization points (default=100)
-            I: Subgradient descent iterations (default=100)
-            strategy : 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local' or 'classical' (classical uses the Graves-Lai solution for bandits without structure)
+            G (networkx graph): The graph G
+            K (int): The number of arms
+            T (int): The time horizon
+            m (int): The number of allowed modes
+            true_means (numpy array): The values of function mu
+            
+        Kwargs:
+            N (int): The number of grid points used for discretization
+            I (int): The number of iterations of subgradient descent or slsqp
+            strategy (string): 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local slsqp' (multimodal slsqp with added local search constraint), 'local' (naive local search rates) or 'classical' (rates given by the Lai-Robbins bound)
+            use_doubling_schedule (boolean): Computes the solution of P_GL every 2^k iterations if True, and every iteration if False
         """
         self.G = G
         self.K = K
@@ -916,6 +923,7 @@ class MultimodalOSSB:
                     G=self.G,
                     mu=self.mu_hat,
                     N=self.N,
+                    I=self.I,
                     nb_modes=self.m,
                     local=is_local_run, 
                     eta0_guess=None # Can also do a warm start: replace None by self.eta_hat
@@ -956,7 +964,7 @@ class MultimodalOSSB:
 
 # Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
-def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
+def runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials):
     results = {}
     plot_data = {}
     
@@ -974,22 +982,22 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
         'figure.figsize': (10, 5)
     })
     
-    for n_modes in n_modes_list:
+    for nb_modes in nb_modes_list:
         for N in N_list:
-            key = (n_modes, N)
+            key = (nb_modes, N)
             plot_data[key] = {'x': [], 'y': []}
     
-    for n_arms in n_arms_list:
-        for n_modes in n_modes_list:
-            if n_modes * 3 - 1 <= n_arms:
+    for nb_arms in nb_arms_list:
+        for nb_modes in nb_modes_list:
+            if nb_modes * 3 - 1 <= nb_arms:
                 for N in N_list:
-                    key = (n_arms, n_modes, N)
+                    key = (nb_arms, nb_modes, N)
                     results[key] = []
                     
                     for trial in range(num_trials):
-                        print(f"\nTrial {trial+1} for Arms: {n_arms}, Modes: {n_modes}, N: {N}")
-                        G = generate_line_graph(n_arms)
-                        modes = generate_spread_out_modes(n_arms, n_modes)
+                        print(f"\nTrial {trial+1} for Arms: {nb_arms}, Modes: {nb_modes}, N: {N}")
+                        G = generate_line_graph(nb_arms)
+                        modes = generate_spread_out_modes(nb_arms, nb_modes)
                         
                         max_mode = np.random.choice(modes)
                         mu = generate_multimodal_function(G, modes, max_mode, 2)
@@ -1001,15 +1009,15 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
                         print(f"Generated modes: {modes}")
                         print(f"Max mode: {max_mode}")
                         print(f"Generated mu (after adjustment): {mu}")
-                        _, _, runtime = subgradient_descent(G, mu, N, 100, n_modes,timed=True) # 100 iterations of subgradient descent
+                        _, _, runtime = subgradient_descent(G, mu, N, 100, nb_modes,timed=True) # 100 iterations of subgradient descent
                         results[key].append(runtime)
                             
     # Calculate average runtimes and store plot data
     for key, runtimes in results.items():
-        n_arms, n_modes, N = key
+        nb_arms, nb_modes, N = key
         avg_runtime = np.mean(runtimes)
-        plot_key = (n_modes, N)
-        plot_data[plot_key]['x'].append(n_arms)
+        plot_key = (nb_modes, N)
+        plot_data[plot_key]['x'].append(nb_arms)
         plot_data[plot_key]['y'].append(avg_runtime)
     
     # Perform log-log regression and plot
@@ -1018,16 +1026,16 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
         axs = [axs]
     
     for i, N in enumerate(N_list):
-        for n_modes in n_modes_list:
-            key = (n_modes, N)
+        for nb_modes in nb_modes_list:
+            key = (nb_modes, N)
             x = np.array(plot_data[key]['x'])
             y = np.array(plot_data[key]['y'])
             if len(x) > 1:  # Need at least two points for regression
                 log_x = np.log(x)
                 log_y = np.log(y)
                 slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, log_y)
-                axs[i].plot(x, y, 'o-', label=f'{n_modes} modes (slope: {slope:.2f})')
-                print(f"N={N}, {n_modes} modes: log-log slope = {slope:.2f}, R^2 = {r_value**2:.2f}")
+                axs[i].plot(x, y, 'o-', label=f'{nb_modes} modes (slope: {slope:.2f})')
+                print(f"N={N}, {nb_modes} modes: log-log slope = {slope:.2f}, R^2 = {r_value**2:.2f}")
         
         axs[i].set_xlabel('Number of arms')
         axs[i].set_ylabel('Average runtime (s)')
@@ -1044,35 +1052,35 @@ def runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials):
 
 if RUNTIME_EXPERIMENT:
     num_trials = 5
-    n_arms_list = [20,25,30,35,40,45,50,55,60,65,70]
-    n_modes_list = [2, 3, 4, 5]
+    nb_arms_list = [20,25,30,35,40,45,50,55,60,65,70]
+    nb_modes_list = [2, 3, 4, 5]
     N_list = [100]
-    results, plot_data = runtime_experiment(n_arms_list, n_modes_list, N_list, num_trials)
+    results, plot_data = runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials)
 
 # The following functions can be used to plot the runtime with respect to the number of modes or the number of discretization points
 
-def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list):
+def analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list, N_list):
     # Reorganize the data to plot the runtime w.r.t. number of modes
     fig, axs = plt.subplots(len(N_list), 1, figsize=(10, 5*len(N_list)))
     if len(N_list) == 1:
         axs = [axs]
 
     for i, N in enumerate(N_list):
-        for n_arms in n_arms_list:
+        for nb_arms in nb_arms_list:
             x = []
             y = []
-            for n_modes in n_modes_list:
-                key = (n_arms, n_modes, N)
+            for nb_modes in nb_modes_list:
+                key = (nb_arms, nb_modes, N)
                 if key in results:
-                    x.append(n_modes)
+                    x.append(nb_modes)
                     y.append(np.mean(results[key]))
             
             if len(x) > 1:
                 log_x = np.log(x)
                 log_y = np.log(y)
                 slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, log_y)
-                axs[i].plot(x, y, 'o-', label=f'{n_arms} arms (slope: {slope:.2f})')
-                print(f"N={N}, {n_arms} arms: log-log slope (n_modes) = {slope:.2f}, R^2 = {r_value**2:.2f}")
+                axs[i].plot(x, y, 'o-', label=f'{nb_arms} arms (slope: {slope:.2f})')
+                print(f"N={N}, {nb_arms} arms: log-log slope (nb_modes) = {slope:.2f}, R^2 = {r_value**2:.2f}")
         
         axs[i].set_xlabel('Number of modes')
         axs[i].set_ylabel('Average runtime (s)')
@@ -1082,21 +1090,21 @@ def analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_
         axs[i].set_yscale('log')
 
     plt.tight_layout()
-    plt.savefig('complexity_n_modes.png')
+    plt.savefig('complexity_nb_modes.png')
     plt.show()
 
-def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
+def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list):
     # Reorganize the data to plot the runtime w.r.t. number of discretization points
-    fig, axs = plt.subplots(len(n_modes_list), 1, figsize=(10, 5*len(n_modes_list)))
-    if len(n_modes_list) == 1:
+    fig, axs = plt.subplots(len(nb_modes_list), 1, figsize=(10, 5*len(nb_modes_list)))
+    if len(nb_modes_list) == 1:
         axs = [axs]
 
-    for i, n_modes in enumerate(n_modes_list):
-        for n_arms in n_arms_list:
+    for i, nb_modes in enumerate(nb_modes_list):
+        for nb_arms in nb_arms_list:
             x = []
             y = []
             for N in N_list:
-                key = (n_arms, n_modes, N)
+                key = (nb_arms, nb_modes, N)
                 if key in results:
                     x.append(N)
                     y.append(np.mean(results[key]))
@@ -1105,12 +1113,12 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
                 log_x = np.log(x)
                 log_y = np.log(y)
                 slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, log_y)
-                axs[i].plot(x, y, 'o-', label=f'{n_arms} arms (slope: {slope:.2f})')
-                print(f"n_modes={n_modes}, {n_arms} arms: log-log slope (N) = {slope:.2f}, R^2 = {r_value**2:.2f}")
+                axs[i].plot(x, y, 'o-', label=f'{nb_arms} arms (slope: {slope:.2f})')
+                print(f"nb_modes={nb_modes}, {nb_arms} arms: log-log slope (N) = {slope:.2f}, R^2 = {r_value**2:.2f}")
         
         axs[i].set_xlabel('Number of discretization points (N)')
         axs[i].set_ylabel('Average runtime (s)')
-        #axs[i].set_title(f'n_modes = {n_modes}')
+        #axs[i].set_title(f'nb_modes = {nb_modes}')
         axs[i].legend()
         axs[i].set_xscale('log')
         axs[i].set_yscale('log')
@@ -1119,16 +1127,16 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
     plt.savefig('complexity_N.png')
     plt.show()
 
-# analyze_complexity_n_modes(results, plot_data, n_arms_list, n_modes_list, N_list)
-# analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list)
+# analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list, N_list)
+# analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list)
 
 # # # Access plot data for a specific N and number of modes
 # N = 100
-# n_modes = 2
-# x_values = plot_data[(n_modes, N)]['x']
-# y_values = plot_data[(n_modes, N)]['y']
+# nb_modes = 2
+# x_values = plot_data[(nb_modes, N)]['x']
+# y_values = plot_data[(nb_modes, N)]['y']
 
-# print(f"For N={N} and {n_modes} modes:")
+# print(f"For N={N} and {nb_modes} modes:")
 # print(f"Number of arms: {x_values}")
 # print(f"Average runtimes: {y_values}")
 
@@ -1136,14 +1144,14 @@ def analyze_complexity_N(results, plot_data, n_arms_list, n_modes_list, N_list):
 
 # Runtime experiment (Original DP vs Improved DP)
 
-def runtime_DP_single_trial(trial_seed, N, num_modes, name, graph_func, K):
+def runtime_DP_single_trial(trial_seed, N, nb_modes, name, graph_func, K):
 
     np.random.seed(trial_seed) 
     G = graph_func(K)
     
     k_star = np.random.randint(K)
     
-    modes_to_set = get_random_modes(G, num_modes, k_star)
+    modes_to_set = get_random_modes(G, nb_modes, k_star)
     mu = generate_multimodal_function(G, modes_to_set, k_star, 2)
     eta = np.random.rand(K)
     nb_modes_in_mu = len(compute_modes(G, mu))
@@ -1158,10 +1166,10 @@ def runtime_DP_single_trial(trial_seed, N, num_modes, name, graph_func, K):
     
     return slow_time, fast_time
 
-def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
+def runtime_DP(num_trials=50, N=100, nb_modes=3, seed_base=0):
     results = []
 
-    print(f"\n--- Experiment 1: Varying K for random trees (modes={num_modes}) ---")
+    print(f"\n--- Experiment 1: Varying K for random trees (modes={nb_modes}) ---")
     node_counts = [100, 400, 700, 1000, 1300, 1600, 1900]
     graph_types = {
         'Random Tree': lambda n: nx.random_tree(n, seed=seed_base) # Use seed_base for graph generation
@@ -1172,7 +1180,7 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
             # Parallelize the trials for this specific (name, K)
             trial_results = Parallel(n_jobs=-1, verbose=5)(
                 delayed(runtime_DP_single_trial)(
-                    seed_base + i, N, num_modes, name, graph_func, K
+                    seed_base + i, N, nb_modes, name, graph_func, K
                 ) for i in range(num_trials)
             )
             # Collect results
@@ -1184,7 +1192,7 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
                     'Improved DP': fast_time
                 })
 
-    print(f"\n--- Experiment 2: Varying branching factor of balanced trees (modes={num_modes}) ---")
+    print(f"\n--- Experiment 2: Varying branching factor of balanced trees (modes={nb_modes}) ---")
     height = 3
     bf_list = [2, 4, 6, 8, 10, 12]
     for bf in bf_list:
@@ -1194,7 +1202,7 @@ def runtime_DP(num_trials=50, N=100, num_modes=3, seed_base=0):
         # Parallelize trials for this specific (bf, K)
         trial_results = Parallel(n_jobs=-1, verbose=5)(
             delayed(runtime_DP_single_trial)(
-                seed_base + i, N, num_modes, 
+                seed_base + i, N, nb_modes, 
                 f'Balanced Tree (h={height})', 
                 lambda k: nx.balanced_tree(bf, height), K 
             ) for i in range(num_trials)
@@ -1348,3 +1356,4 @@ if REGRET_EXPERIMENT:
         plot_results(mmslsqp_regrets[:actual_trials], 
                 localslsqp_regrets[:actual_trials], 
                 classical_regrets[:actual_trials], T, actual_trials)
+
