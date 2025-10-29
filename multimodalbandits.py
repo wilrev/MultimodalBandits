@@ -14,7 +14,7 @@ RUNTIME_EXPERIMENT = False
 """ Set to True to run timing experiments"""
 RUNTIME_IMPROVED_DP_EXPERIMENT = False 
 """ Set to True to compare fast and slow dynamic programming """
-REGRET_EXPERIMENT = False 
+REGRET_EXPERIMENT = True 
 """ Set to True to compute the regret of various algorithms """
 
 #__________________Helpful auxiliary functions__________________
@@ -835,22 +835,23 @@ def slsqp(G,mu,N,I,nb_modes,local=False,eta0_guess=None):
 #__________________OSSB implementation__________________
 
 class MultimodalOSSB:
-     """ OSSB algorithm, with various exploration rates.
-        Args:
-            G (networkx graph): The graph G
-            K (int): The number of arms
-            T (int): The time horizon
-            m (int): The number of allowed modes
-            true_means (numpy array): The values of function mu
-            
-        Kwargs:
-            N (int): The number of grid points used for discretization
-            I (int): The number of iterations of subgradient descent or slsqp
-            strategy (string): 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local slsqp' (multimodal slsqp with added local search constraint), 'local' (naive local search rates) or 'classical' (rates given by the Lai-Robbins bound)
-            use_doubling_schedule (boolean): Computes the solution of P_GL every 2^k iterations if True, and every iteration if False
-      
-        Returns: MultimodalOSSB instance
-        """
+    """ OSSB algorithm, with various exploration rates.
+    
+     Args:
+           G (networkx graph): The graph G
+           K (int): The number of arms
+           T (int): The time horizon
+           m (int): The number of allowed modes
+           true_means (numpy array): The values of function mu
+           
+     Kwargs:
+           N (int): The number of grid points used for discretization
+           I (int): The number of iterations of subgradient descent or slsqp
+           strategy (string): 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local slsqp' (multimodal slsqp with added local search constraint), 'local' (naive local search rates) or 'classical' (rates given by the Lai-Robbins bound)
+           use_doubling_schedule (boolean): Computes the solution of P_GL every 2^k iterations if True, and every iteration if False
+     
+     Returns: MultimodalOSSB instance
+     """
     def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
         self.G = G
         self.K = K
@@ -967,20 +968,20 @@ class MultimodalOSSB:
 # Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
 def runtime_experiment(nb_arms_list, nb_modes_list, N_list, nb_trials):
-     """ Performs the runtime experiment on a line graph from Appendix A.2 with nb_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
-        Args:
-            nb_arms_list (list): The number of arms to test
-            nb_modes_list (list): The number of allowed modes to test
-            N_list (list): The number of grid points used for discretization to test
-            nb_trials (int): The number of trials
-      
-        Returns: 
-            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each list contains the runtime (in seconds) for each trial for the given parameters
-            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
-                - 'x' (list[int]): number of arms values used for plotting
-                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
-            Saves the figure as 'runtime_analysis.png', shows the plot, and prints log-log regression slopes and R^2 values for each curve.
-        """
+    """ Performs the runtime experiment on a line graph from Appendix A.2 with nb_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
+    Args:
+           nb_arms_list (list): The number of arms to test
+           nb_modes_list (list): The number of allowed modes to test
+           N_list (list): The number of grid points used for discretization to test
+           nb_trials (int): The number of trials
+     
+    Returns: 
+           results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each list contains the runtime (in seconds) for each trial for the given parameters
+           plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+               - 'x' (list[int]): number of arms values used for plotting
+               - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+           Saves the figure as 'runtime_analysis.png', shows the plot, and prints log-log regression slopes and R^2 values for each curve.
+    """
     results = {}
     plot_data = {}
     
@@ -1076,21 +1077,21 @@ if RUNTIME_EXPERIMENT:
 # The following functions can be used to plot the runtime with respect to the number of modes or the number of discretization points
 
 def analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list, N_list):
-     """ Reorganize the data and plot average runtime w.r.t. number of modes.
+    """ Reorganize the data and plot average runtime w.r.t. number of modes.
 
-        Args:
-            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
-                list contains the runtime (in seconds) for each trial for the given parameters
-            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
-                - 'x' (list[int]): number of arms values used for plotting
-                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
-            nb_arms_list (list): The number of arms to test
-            nb_modes_list (list): The number of allowed modes to test
-            N_list (list): The number of grid points used for discretization to test
+    Args:
+           results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
+               list contains the runtime (in seconds) for each trial for the given parameters
+           plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+               - 'x' (list[int]): number of arms values used for plotting
+               - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+           nb_arms_list (list): The number of arms to test
+           nb_modes_list (list): The number of allowed modes to test
+           N_list (list): The number of grid points used for discretization to test
 
-        Returns:
-            None: Saves the figure as 'complexity_nb_modes.png', shows the plot, and
-            prints log-log regression slopes and R^2 values for each curve
+    Returns:
+           None: Saves the figure as 'complexity_nb_modes.png', shows the plot, and
+           prints log-log regression slopes and R^2 values for each curve
     """
     # Reorganize the data to plot the runtime w.r.t. number of modes
     fig, axs = plt.subplots(len(N_list), 1, figsize=(10, 5*len(N_list)))
@@ -1126,21 +1127,21 @@ def analyze_complexity_nb_modes(results, plot_data, nb_arms_list, nb_modes_list,
     plt.show()
 
 def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list):
-     """ Reorganize the data and plot average runtime w.r.t. number of discretization points
+    """ Reorganize the data and plot average runtime w.r.t. number of discretization points
 
-        Args:
-            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
-                list contains the runtime (in seconds) for each trial for the given parameters
-            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
-                - 'x' (list[int]): number of arms values used for plotting
-                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
-            nb_arms_list (list): The number of arms to test
-            nb_modes_list (list): The number of allowed modes to test
-            N_list (list): The number of grid points used for discretization to test
+    Args:
+           results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each
+               list contains the runtime (in seconds) for each trial for the given parameters
+           plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+               - 'x' (list[int]): number of arms values used for plotting
+               - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+           nb_arms_list (list): The number of arms to test
+           nb_modes_list (list): The number of allowed modes to test
+           N_list (list): The number of grid points used for discretization to test
 
-        Returns:
-            None: Saves the figure as 'complexity_N.png', shows the plot, and
-            prints log-log regression slopes and R^2 values for each curve
+    Returns:
+           None: Saves the figure as 'complexity_N.png', shows the plot, and
+           prints log-log regression slopes and R^2 values for each curve
     """
     fig, axs = plt.subplots(len(nb_modes_list), 1, figsize=(10, 5*len(nb_modes_list)))
     if len(nb_modes_list) == 1:
@@ -1193,7 +1194,7 @@ def analyze_complexity_N(results, plot_data, nb_arms_list, nb_modes_list, N_list
 
 def runtime_DP_single_trial(trial_seed, N, nb_modes, graph_func, K):
     """ Performs a single trial of the runtime experiment of Appendix E.8 comparing both DP implementations
-        Args:
+    Args:
             trial_seed (int): The random seed, can be fixed for reproducibility
             N (int): The number of grid points used for discretization
             nb_modes (int): The number of allowed modes
@@ -1203,7 +1204,7 @@ def runtime_DP_single_trial(trial_seed, N, nb_modes, graph_func, K):
     Returns: 
         (slow_time,fast_time) (float,float) : The runtime in seconds for the original DP and the improved DP, respectively.
         """
-
+    
     np.random.seed(trial_seed) 
     G = graph_func(K)
     
@@ -1357,7 +1358,7 @@ def run_single_trial(trial_seed, true_means, graph, m, K, T, use_doubling_schedu
     Returns:
         (regret_mmslsqp, regret_local, regret_classical) (list,list): Contains the cumulative regret history (a list of floats) for
         the 'multimodal slsqp', 'local', and 'classical' strategies, respectively
-"""
+    """
     np.random.seed(trial_seed)
 
     def run_one_strategy(strategy):
@@ -1400,7 +1401,7 @@ def run_all_trials_parallel(true_means, graph, m, K, T, nb_trials, seed_base, us
     Returns:
         mmslsqp_regrets, local_regrets, classical_regrets (numpy array, numpy array, numpy array): Each array has shape
         (nb_trials, T) and contains the regret histories for all trials for the 'multimodal slsqp', 'local' and 'classical' strategies, respectively
-"""
+    """
     # n_jobs = -1 ensures all threads are used when parallelizing. To not parallelize, set n_jobs = 1
     results = Parallel(n_jobs=-1, verbose=10)(
         delayed(run_single_trial)(
