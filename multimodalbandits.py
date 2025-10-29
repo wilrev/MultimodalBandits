@@ -10,11 +10,11 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 from joblib import Parallel, delayed
 
-RUNTIME_EXPERIMENT = False 
+RUNTIME_EXPERIMENT = False
 """ Set to True to run timing experiments"""
-RUNTIME_IMPROVED_DP_EXPERIMENT = False 
+RUNTIME_IMPROVED_DP_EXPERIMENT = False
 """ Set to True to compare fast and slow dynamic programming """
-REGRET_EXPERIMENT = False
+REGRET_EXPERIMENT = False 
 """ Set to True to compute the regret of various algorithms """
 
 #__________________Helpful auxiliary functions__________________
@@ -95,7 +95,7 @@ def generate_spread_out_modes(nb_arms, nb_modes):
     """ For a line graph with nodes {0,...,nb_arms-1} and nb_modes modes, computes a set of spread out modes that maximizes the number of points outside of their neighborhood. Helpful to get a more representative runtime in the runtime experiment
     Args:
         nb_arms (int): The number of arms
-        nb_modes (TODO): The number of modes
+        nb_modes (int): The number of modes
 
     Returns:
         modes: The set of modes
@@ -1474,7 +1474,6 @@ if REGRET_EXPERIMENT:
 
         # Plot results using the actual number of completed trials
         plot_results(mmslsqp_regrets[:actual_trials], classical_regrets[:actual_trials], T, actual_trials)
-
 
 
 
