@@ -835,8 +835,7 @@ def slsqp(G,mu,N,I,nb_modes,local=False,eta0_guess=None):
 #__________________OSSB implementation__________________
 
 class MultimodalOSSB:
-    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
-        """
+     """ OSSB algorithm, with various exploration rates.
         Args:
             G (networkx graph): The graph G
             K (int): The number of arms
@@ -849,7 +848,10 @@ class MultimodalOSSB:
             I (int): The number of iterations of subgradient descent or slsqp
             strategy (string): 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local slsqp' (multimodal slsqp with added local search constraint), 'local' (naive local search rates) or 'classical' (rates given by the Lai-Robbins bound)
             use_doubling_schedule (boolean): Computes the solution of P_GL every 2^k iterations if True, and every iteration if False
+      
+        Returns: MultimodalOSSB instance
         """
+    def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
         self.G = G
         self.K = K
         self.T = T
@@ -965,6 +967,19 @@ class MultimodalOSSB:
 # Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
 def runtime_experiment(nb_arms_list, nb_modes_list, N_list, num_trials):
+     """ Performs the runtime experiment on a line graph from Appendix A.2 with num_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
+        Args:
+            nb_arms_list (list): The number of arms
+            nb_modes_list (list): The number of allowed modes
+            N_list (list): The time horizon
+            num_trials (int): The number of trials
+      
+        Returns: 
+            results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each list contains the runtime (in seconds) for each trial for the given parameters
+            plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
+                - 'x' (list[int]): number of arms values used for plotting
+                - 'y' (list[float]): corresponding average runtimes (seconds) for each x
+        """
     results = {}
     plot_data = {}
     
@@ -1356,4 +1371,5 @@ if REGRET_EXPERIMENT:
         plot_results(mmslsqp_regrets[:actual_trials], 
                 localslsqp_regrets[:actual_trials], 
                 classical_regrets[:actual_trials], T, actual_trials)
+
 
