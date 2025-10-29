@@ -743,7 +743,7 @@ def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
         timed (boolean): Set to True to compute the runtime
 
     Returns:
-        (eta_final,value,runtime): (numpy array,float,float) The optimal solution, the corresponding value of P_GL and the runtime
+        (eta_final,value,runtime) (numpy array,float,float): The optimal solution, the corresponding value of P_GL and the runtime
 
     """
     if timed:
@@ -798,7 +798,7 @@ def slsqp(G,mu,N,I,nb_modes,local=False,eta0_guess=None):
         eta0_guess (numpy array): Initial guess for eta, if any 
 
     Returns:
-        sol: (OptimizeResult object) The optimal solution
+        sol (OptimizeResult object): The optimal solution
 
     """
 
@@ -849,8 +849,6 @@ class MultimodalOSSB:
            I (int): The number of iterations of subgradient descent or slsqp
            strategy (string): 'multimodal' (with subgradient descent), 'multimodal slsqp' (with SLSQP), 'local slsqp' (multimodal slsqp with added local search constraint), 'local' (naive local search rates) or 'classical' (rates given by the Lai-Robbins bound)
            use_doubling_schedule (boolean): Computes the solution of P_GL every 2^k iterations if True, and every iteration if False
-     
-     Returns: MultimodalOSSB instance
      """
     def __init__(self, G, K, T, m, true_means, N=100, I=100, strategy="multimodal", use_doubling_schedule=False):
         self.G = G
@@ -968,19 +966,16 @@ class MultimodalOSSB:
 # Runtime Experiment (OriginaL DP, varying the number of modes and nodes)
 
 def runtime_experiment(nb_arms_list, nb_modes_list, N_list, nb_trials):
-    """ Performs the runtime experiment on a line graph from Appendix A.2 with nb_trials trials, for all number of arms (resp. modes, number of grid points) in nb_arms_list (resp. nb_modes_list, N_list)
+    """ Performs the runtime experiment on a line graph from Appendix A.2 with nb_trials trials,for all number of arms, 
+    modes, and grid points specified in the input lists. It saves the resulting figure as 'runtime_analysis.png', shows the plot, and prints log-log regression slopes and R^2 values for each curve
     Args:
            nb_arms_list (list): The number of arms to test
            nb_modes_list (list): The number of allowed modes to test
            N_list (list): The number of grid points used for discretization to test
-           nb_trials (int): The number of trials
-     
-    Returns: 
-           results (dict): Mapping `(nb_arms, nb_modes, N) -> list[float]` where each list contains the runtime (in seconds) for each trial for the given parameters
-           plot_data (dict): Mapping `(nb_modes, N) -> dict` with keys:
-               - 'x' (list[int]): number of arms values used for plotting
-               - 'y' (list[float]): corresponding average runtimes (seconds) for each x
-           Saves the figure as 'runtime_analysis.png', shows the plot, and prints log-log regression slopes and R^2 values for each curve.
+           nb_trials (int): The number of trials  
+           
+    Returns:
+        (results,plot_data) (dict,dict): The raw trial runtimes and the data organized for plotting   
     """
     results = {}
     plot_data = {}
@@ -1200,9 +1195,9 @@ def runtime_DP_single_trial(trial_seed, N, nb_modes, graph_func, K):
             nb_modes (int): The number of allowed modes
             graph_func (callable): A function that takes a number of nodes K as input and returns a networkx graph with K nodes.
             K (int): The number of nodes in the graph.
-  
+            
     Returns: 
-        (slow_time,fast_time) (float,float) : The runtime in seconds for the original DP and the improved DP, respectively.
+            (slow_time,fast_time) (float,float) : The runtime in seconds for the original DP and the improved DP, respectively.
         """
     
     np.random.seed(trial_seed) 
@@ -1226,9 +1221,7 @@ def runtime_DP_single_trial(trial_seed, N, nb_modes, graph_func, K):
     return slow_time, fast_time
 
 def runtime_DP(nb_trials=50, N=100, nb_modes=3, seed_base=0):
-    """ Conducts and plots the runtime comparison between the original and improved DP implementations
-
-    This function runs two main experiments:
+    """ Conducts and plots the runtime comparison between the original and improved DP implementations. This function runs two main experiments:
     1. Varying the number of nodes (K) for random trees.
     2. Varying the branching factor for balanced trees of a fixed height.
     It parallelizes the trials for efficiency and generates plots to visualize the results.
