@@ -10,13 +10,26 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 from joblib import Parallel, delayed
 
-RUNTIME_EXPERIMENT = False
-RUNTIME_IMPROVED_DP_EXPERIMENT = False
-REGRET_EXPERIMENT = False
+RUNTIME_EXPERIMENT = False 
+""" Set to True to run timing experiments"""
+RUNTIME_IMPROVED_DP_EXPERIMENT = False 
+""" Set to True to compare fast and slow dynamic programming """
+REGRET_EXPERIMENT = False 
+""" Set to True to compute the regret of various algorithms """
 
 #__________________Helpful auxiliary functions__________________
 
 def compute_modes(G,mu):
+    """ Compute the set of modes of a function defined over a graph 
+
+    Args:
+        G (networkx graph): The graph G 
+        mu (numpy array): The values of function mu
+
+    Returns:
+        f (list): The set of modes of mu
+
+    """
     f = []
     for i in range(mu.shape[0]):
         if (mu[i]- max([mu[k] for k in G[i]]) > 0):
@@ -24,6 +37,16 @@ def compute_modes(G,mu):
     return(f)
 
 def modes_neighborhood(G,mu):
+    """Compute the set of neigbours of modes of a function defined over a graph
+
+    Args:
+        G (networkx graph): The graph G 
+        mu (numpy array): The values of function mu
+
+    Returns:
+        f (list): The set of neighbours of modes of mu
+
+    """
     f = []
     for i in range(mu.shape[0]):
         if (mu[i]-max([mu[k] for k in G[i]]) > 0) and not (i in f):
@@ -33,17 +56,34 @@ def modes_neighborhood(G,mu):
                     f.append(k)
     f.sort()
     return(f)
-    
+
 def generate_line_graph(n):
-# Generate a line graph with n nodes
+    """Generate a line graph with a given number of nodes
+
+    Args:
+        n (int): Number of nodes 
+
+    Returns:
+        G (networkx graph): A line graph with n nodes
+
+    """
     G = nx.Graph()
     for i in range(n-1):
         G.add_edge(i,i+1)
     return(G)
         
 def generate_multimodal_function(G,m,mmax,sigma):
-# Generate a multimodal function over graph G with sets of modes m using a gaussian mixture function
-# Note: if sigma is too large, the gaussian peaks might "merge" so that the generated function is less than len(m)-multimodal
+    """ Generate a multimodal function over a graph with a specfied set of modes using a gaussian mixture function. Warning: if sigma is too large, the gaussian peaks might "merge" so that the generated function is less than len(m)-multimodal
+    Args:
+        G (networkx graph): The graph G
+        m (list): The set of modes 
+        mmax (float): The value of the mixture components at the modes
+        sigma (float): The standard deviation for each gaussian mixture component
+
+    Returns:
+        mu (numpy array):  A multimodal function over graph G with set of modes equal to m
+
+    """
     mu = np.zeros(G.number_of_nodes())
     d = dict(nx.all_pairs_shortest_path_length(G))
     for j in m:
@@ -51,14 +91,21 @@ def generate_multimodal_function(G,m,mmax,sigma):
             mu[i] = mu[i] + (1 + (j == mmax))*np.exp(-(1/(sigma))*d[i][j])
     return(mu)
 
-def generate_spread_out_modes(n_arms, n_modes): 
-    # Maximizes the number of points outside of the neighborhood of the modes to have a more representative runtime
+def generate_spread_out_modes(n_arms, n_modes):
+    """ TODO Maximizes the number of points outside of the neighborhood of the modes to have a more representative runtime
+    Args:
+        n_arms (int): The number of arms
+        n_modes (TODO): The number of modes
+
+    Returns:
+        modes: The set of modes
+
+    """
     if n_modes * 3 - 1 > n_arms:
         raise ValueError(f"Cannot generate {n_modes} spread out modes for {n_arms} arms.")
     
     modes = []
     available_positions = list(range(n_arms))
-    
     # Start with the extremes
     modes.append(0)
     modes.append(n_arms - 1)
@@ -80,8 +127,18 @@ def generate_spread_out_modes(n_arms, n_modes):
         available_positions = [p for p in available_positions if abs(p - new_mode) > 1]
     
     return sorted(modes)
-
 def get_random_modes(G, num_modes, k_star):
+    """TODO: Docstring for get_random_modes.
+
+    Args:
+        G (networkx graph): The graph G 
+        num_modes (int): The number of modes
+        k_star (int): The optimal arm
+
+    Returns:
+        modes: The set of modes
+
+    """
     modes = {k_star}
     forbidden = {k_star} | set(G.neighbors(k_star))
     available_nodes = [n for n in G.nodes() if n not in forbidden]
@@ -95,16 +152,37 @@ def get_random_modes(G, num_modes, k_star):
     return list(modes)
 
 def divergence(mu,lam):
-    # Compute the gaussian divergence between distributions \nu(mu_1),....,\nu(mu_L) and \nu(lambda_1),....,\nu(lambda_L), the output being a vector of divergences
+    """ Compute the gaussian divergences between distributions nu(mu) and nu(lambda) 
+
+    Args:
+        mu (numpy array): The values of function mu
+        lam (numpy array): The values of function lambda
+
+    Returns:
+        (numpy array): The values of the divergences 
+
+    """
     return((1/2)*(mu-lam)**2)
     
 
 
 #__________________Main dynamic programming algorithm__________________
 
+def regression_graph(G,mu,eta,p,k,N):
+    """Compute the minimizer of the weighted sum of divergences sum_k eta_k d(mu_k,lambda_k) over all multimodal functions lambda with a fixed set of modes, discretized over a grid
 
+    Args:
+        G (networkx graph): The graph G
+        mu (numpy array): The values of function mu
+        eta (numpy array): The values of weights eta
+        p (list): The location of the modes of lambda
+        k (int): The maximal entry of lambda
+        N (int): The number of grid points used for discretization
 
-def regression_graph(G, mu, eta, p, k, N):
+    Returns:
+        lambdastar (numpy array): The values of minimizer lambda
+
+    """
     INF = 1e10
     K = mu.shape[0]
     kstar = int(np.argmax(mu))
@@ -245,61 +323,81 @@ def regression_graph(G, mu, eta, p, k, N):
                     lambdastar[ell] = grid[j]
 
     return lambdastar
-    
-def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
-    # Compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
-    v = sum( eta*divergence(mu,lambdastar))
-    err = nx.eccentricity(G,k)*(1/N)*(max(mu)-min(mu))*sum(2*eta*np.abs(lambdastar-mu))
-    return(v/(v-err))
-
-     
+#def regression_approx_ratio(G,mu,lambdastar,eta,k,N):
+#    # Compute an approximation ratio for the algorithm (i.e. we are guaranteed that the algorithm works better than this)
+#    v = sum( eta*divergence(mu,lambdastar))
+#    err = nx.eccentricity(G,k)*(1/N)*(max(mu)-min(mu))*sum(2*eta*np.abs(lambdastar-mu))
+#    return(v/(v-err))
 def regression_all(G,mu,eta,N,nb_modes):
-     # Computes explicitly the solution of PGL(k) when k is in the neighborhood of a mode or mu has strictly less than m modes, performs dynamic programming for the other k's
-     kstar = np.argmax(mu)
-     m = compute_modes(G,mu)
-     K=mu.shape[0]
-     lambdastar = np.ones(K)*np.max(mu)
-     vstar = sum(eta*divergence(mu,lambdastar)) 
-     if nb_modes > len(m): #if mu is strictly less than m-modal, we have no constraints besides lambda[k]=lambda[kstar] for k different than kstar
-         for k in [k_val for k_val in range(K) if k_val != kstar]:
-             lambdastar_new=np.copy(mu)
-             lambdastar_new[k]=mu[kstar]
-             if (vstar > sum(eta*divergence(mu,lambdastar_new))):
-                 lambdastar = lambdastar_new
-                 vstar = sum(eta*divergence(mu,lambdastar))
-     else:
-         neighborhood=modes_neighborhood(G,mu)
-         if kstar in neighborhood:
-             neighborhood.remove(kstar)
-             remote_arms = [k for k in range(K) if k != kstar and k not in neighborhood]
-         for k in neighborhood:
-             lambdastar_new=np.copy(mu)
-             lambdastar_new[k]=mu[kstar]
-             if (vstar > sum(eta*divergence(mu,lambdastar_new))):
-                 lambdastar = lambdastar_new
-                 vstar = sum(eta*divergence(mu,lambdastar))
-                 
-         if nb_modes == 1:
-             return (lambdastar, vstar) # This is the optimal solution in the unimodal case
-      
-         remote_arms = [k for k in range(K) if k != kstar and k not in neighborhood]
-         for k in remote_arms:
-             for j in m:
-                 p = list(m);p.remove(j);p.append(k)
-                 lambda_new=np.copy(mu)
-                 lambda_new[k]=mu[kstar]
-                 if vstar>sum(eta*divergence(mu,lambda_new)): # If this is not the case, it is unecessary to go further
-                     lambdastar_new = regression_graph(G,mu,eta,p,k,N)
-                     if (vstar > sum(eta*divergence(mu,lambdastar_new))):
-                         lambdastar = lambdastar_new
-                         vstar = sum(eta*divergence(mu,lambdastar))
-     return (lambdastar,vstar)
+    """Compute the minimizer of the weighted sum of divergences sum_k eta_k d(mu_k,lambda_k) over all multimodal functions lambda with a fixed number of modes, discretized over a grid
+
+    Args:
+        G (networkx graph): The graph G
+        mu (numpy array): The values of function mu
+        eta (numpy array): The values of weights eta
+        N (int): The number of grid points used for discretization
+        nb_modes (int): The number of modes of lambda 
+
+    Returns:
+        (lambdastar,vstar) (numpy array, float): The values of minimizer lambda and the minimal value of the weighted sum of divergences 
+
+    """
+    # Computes explicitly the solution of PGL(k) when k is in the neighborhood of a mode or mu has strictly less than m modes, performs dynamic programming for the other k's
+    kstar = np.argmax(mu)
+    m = compute_modes(G,mu)
+    K=mu.shape[0]
+    lambdastar = np.ones(K)*np.max(mu)
+    vstar = sum(eta*divergence(mu,lambdastar)) 
+    if nb_modes > len(m): #if mu is strictly less than m-modal, we have no constraints besides lambda[k]=lambda[kstar] for k different than kstar
+        for k in [k_val for k_val in range(K) if k_val != kstar]:
+            lambdastar_new=np.copy(mu)
+            lambdastar_new[k]=mu[kstar]
+            if (vstar > sum(eta*divergence(mu,lambdastar_new))):
+                lambdastar = lambdastar_new
+                vstar = sum(eta*divergence(mu,lambdastar))
+    else:
+        neighborhood=modes_neighborhood(G,mu)
+        if kstar in neighborhood:
+            neighborhood.remove(kstar)
+            remote_arms = [k for k in range(K) if k != kstar and k not in neighborhood]
+        for k in neighborhood:
+            lambdastar_new=np.copy(mu)
+            lambdastar_new[k]=mu[kstar]
+            if (vstar > sum(eta*divergence(mu,lambdastar_new))):
+                lambdastar = lambdastar_new
+                vstar = sum(eta*divergence(mu,lambdastar))
+                
+        if nb_modes == 1:
+            return (lambdastar, vstar) # This is the optimal solution in the unimodal case
+     
+        remote_arms = [k for k in range(K) if k != kstar and k not in neighborhood]
+        for k in remote_arms:
+            for j in m:
+                p = list(m);p.remove(j);p.append(k)
+                lambda_new=np.copy(mu)
+                lambda_new[k]=mu[kstar]
+                if vstar>sum(eta*divergence(mu,lambda_new)): # If this is not the case, it is unecessary to go further
+                    lambdastar_new = regression_graph(G,mu,eta,p,k,N)
+                    if (vstar > sum(eta*divergence(mu,lambdastar_new))):
+                        lambdastar = lambdastar_new
+                        vstar = sum(eta*divergence(mu,lambdastar))
+    return (lambdastar,vstar)
     
 
 #__________________fast Dynamic Programming algorithm__________________
 
 def fast_minimization(g,b,c):
-# Compute the minimization of sum_{v \in C(\ell)} g(b_v,c_v) across all ({\bf b},{\bf c}) \in B_ell(b,c) \times C_ell(b,c) using "fast minimization"
+    """ Compute the minimization of sum_{v in C(ell)} g(b_v,c_v) under constraints that sum_{v in C(ell)} b_v = b and sum_{v in C(ell)} c_v = c  using "fast minimization"
+
+    Args:
+        g (numpy array): The values of g, with size (size(C) x 2 x 2) 
+        b (int): The value of sum_{v in C(ell)} b_v. Should be either 0 or 1.
+        c (int): The value of sum_{v in C(ell)} c_v. Should be either 0 or 1.
+
+    Returns:
+        (vstar,bstar,cstar) (float,numpy array,numpy array): the minimal value as well as the optimal solution
+
+    """
     vstar = 10**10
     bstar = [0 for i in range( g.shape[0] )] 
     cstar = [0 for i in range( g.shape[0] )] 
@@ -350,6 +448,19 @@ def fast_minimization(g,b,c):
 
 
 def fast_dynamic_programming(G,mu,eta,N,nb_modes):
+    """Compute the minimizer of the weighted sum of divergences sum_k eta_k d(mu_k,lambda_k) over all multimodal functions lambda with a fixed number of modes, discretized over a grid, using a more elaborate method than regression_all. This method is expected to be faster for large graphs of high degree.
+
+    Args:
+        G (networkx graph): The graph G
+        mu (numpy array): The values of function mu
+        eta (numpy array): The values of weights eta
+        N (int): The number of grid points used for discretization
+        nb_modes (int): The number of modes of lambda 
+
+    Returns:
+        (lambdastar,vstar) (numpy array, float): The values of minimizer lambda and the minimal value of the weighted sum of divergences 
+
+    """
     # Find the minimal value of the weighted divergence with m modes, discretization number N
     M = compute_modes(G,mu)
     K = mu.shape[0]
@@ -617,9 +728,22 @@ def fast_dynamic_programming(G,mu,eta,N,nb_modes):
 
 
 #__________________Projected subgradient descent__________________
-
 def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
-    # Uses values of penalization and step size suggested by the analysis
+    """Computes the optimal solution of the Graves-Lai optimization problem using subgradient descent. Uses values of penalization and step size suggested by the theoretical analysis. Alternative to slsqp.
+    Args:
+        G (networkx graph): The graph G
+        mu (numpy array): The values of function mu
+        N (int): The number of grid points used for discretization
+        I (int): The number of iterations of subgradient descent
+        nb_modes (int): The number of modes of lambda 
+
+    Kwargs:
+        timed (boolean): Set to True to compute the runtime
+
+    Returns:
+        (eta_final,sum(eta_final*Delta),runtime): (numpy array,float,float) The optimal solution, the corresponding regret and the runtime
+
+    """
     if timed:
         start_time=time.time()
     kstar = np.argmax(mu)
@@ -657,6 +781,24 @@ def subgradient_descent(G,mu,N,I,nb_modes,timed=False):
         return(eta_final,sum(eta_final*Delta))
 
 def slsqp(G,mu,N,nb_modes,local=False,eta0_guess=None): # Minimizing function from python, can be used instead of subgradient descent.
+    """Computes the optimal solution of the Graves-Lai optimization problem using the built-in minimization from Python. Alternative to subgradient_descent.
+
+    Args:
+        G (networkx graph): The graph G
+        mu (numpy array): The values of function mu
+        N (int): The number of grid points used for discretization
+        I (int): The number of iterations of subgradient descent
+        nb_modes (int): The number of modes of lambda 
+
+    Kwargs:
+        local (boolean): Use local search if True 
+        eta0_guess (numpy array): Initial guess for eta, if any 
+
+    Returns:
+        sol: (OptimizeResult object) The optimal solution
+
+    """
+
     # If local=True, computes optimal rates under a local search constraint
     kstar = np.argmax(mu)
     Delta = mu[kstar] - mu
