@@ -14,7 +14,7 @@ RUNTIME_EXPERIMENT = False
 """ Set to True to run timing experiments"""
 RUNTIME_IMPROVED_DP_EXPERIMENT = False 
 """ Set to True to compare fast and slow dynamic programming """
-REGRET_EXPERIMENT = True 
+REGRET_EXPERIMENT = False
 """ Set to True to compute the regret of various algorithms """
 
 #__________________Helpful auxiliary functions__________________
@@ -1474,6 +1474,7 @@ if REGRET_EXPERIMENT:
 
         # Plot results using the actual number of completed trials
         plot_results(mmslsqp_regrets[:actual_trials], classical_regrets[:actual_trials], T, actual_trials)
+
 
 
 
