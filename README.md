@@ -13,6 +13,8 @@ This repository contains the Python code used for the runtime and regret experim
    
 ➤ The flags RUNTIME_EXPERIMENT, RUNTIME_IMPROVED_DP_EXPERIMENT and REGRET_EXPERIMENT can be set to True to run the experiments of Appendix A.2, Appendix E.8 and Section 6 respectively.
 
+All functions have a docstring, and a documentation is found in folder "docs".
+
 ## License
 
 <a href="https://choosealicense.com/licenses/mit/">MIT</a> License.
